@@ -1,0 +1,10 @@
+/var/log/iotronic/lightning-rod.log /var/log/iotronic/plugins/*.log /var/log/wstun/wstun.log{
+    copytruncate
+    missingok
+    weekly
+    rotate = 3
+    compress
+    notifempty
+    su root root
+    maxsize 5M
+}

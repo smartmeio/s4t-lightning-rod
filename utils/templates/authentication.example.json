@@ -1,0 +1,29 @@
+{
+	"auth":{
+		"board":
+		{
+			"code":"",
+			"layout": "",
+			"authentication":{
+				"auth_lr_mode":"password",
+				"password": ""
+			}
+		},
+		"wamp":
+		{
+			"url_wamp": "",
+			"port_wamp": "8181",
+			"realm": "s4t",
+			"wamp_socket_recovery": "true",
+			"rpc_alive_time": 600,
+			"check_skt_time": 30
+		},
+		"wstun":
+		{
+			"ws_url": "",
+			"ws_port": "8080",
+			"bin": "/usr/lib/node_modules/@mdslab/wstun/bin/wstun.js"
+		}
+
+	}
+}
