@@ -4,6 +4,8 @@
 STUFF
 iotronic-standalone/ssl/*
 s4t-lightning-rod.log
+__pycache__/
+
 
 # ---> Node
 # Logs
