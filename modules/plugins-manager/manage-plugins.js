@@ -170,7 +170,8 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 
 
 
-					}else{
+					}
+					else{
 						// the plugin is normally running
 						console.log('[PLUGIN] - PluginChecker - '+ plugin_name + ' with PID: ' + plugins[plugin_name].pid + ' alive: '+ plugins[plugin_name].alive );
 
@@ -1528,7 +1529,7 @@ exports.pluginsLoader = function (){
 
 						if(plugin_num > 0) {
 
-							var enabledPlugins = { "plugins":{}};
+							var enabledPlugins = { "plugins":{} };
 
 							for (var i = 0; i < plugin_num; i++) {
 
@@ -2486,8 +2487,6 @@ exports.restartPlugin = function(args){
 
 
 };
-
-
 
 
 // RPC to manage the removal of a plugin from the device: it is called by Iotronic via RPC
