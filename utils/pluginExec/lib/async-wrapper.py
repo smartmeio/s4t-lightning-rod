@@ -80,7 +80,7 @@ class Plugin(threading.Thread):
 
         except Exception as err:
 
-            logging = api.getLogger(plugin_name)
+            logging = api.getLogger(plugin_name, console=True)
             logging.exception("Exception occurred in plugin")
 
             response = {
@@ -99,7 +99,7 @@ if __name__ == '__main__':
 
     api = imp.load_source("api", os.environ['LIGHTNINGROD_HOME'] + "/modules/plugins-manager/python/plugin_apis.py")
 
-    logging = api.getLogger(plugin_name)
+    logging = api.getLogger(plugin_name, console=True)
     logging.info(plugin_name + " started with these parameters: " + str(plugin_params) )
 
     worker = Plugin(

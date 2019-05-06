@@ -18,7 +18,7 @@
 //##
 //############################################################################################
 
-// ./exec_plg local|injected async|sync py_sync
+// ./exec_plg <local|injected> <async|sync> <PLUGIN-NAME>
 
 var fs = require("fs");
 const {PythonShell} = require('python-shell');
@@ -34,7 +34,7 @@ if(args.length < 5){
     if(args.length != 2)
         console.log("Wrong arguments!");
 
-    console.log("Usage:\n\t ./exec_plg <local|injected> <sync|async> <PLUGIN_NAME>");
+    console.log("Usage:\n\t ./exec_plg <local|injected> <sync|async> <PLUGIN-NAME>");
 
     process.exit();
 
@@ -152,18 +152,15 @@ if(plugin_type == "async"){
 
             console.log(response)
 
-
         }
         else{
 
             console.log('[PLUGIN-SHELL] - Python shell of "'+plugin_name+'" plugin terminated: {signal: '+ signal+', code: '+code+'}');
 
             if(signal == null && code == 0){
-
                 console.log("[PLUGIN-SHELL] --> unexpected '"+plugin_name+"' plugin termination!");
-
             }else{
-                console.log("[PLUGIN-SHELL] --> Python plugin '"+plugin_name+"' terminated!")
+                console.log("[PLUGIN-SHELL] --> python plugin '"+plugin_name+"' terminated!")
             }
 
         }
@@ -193,11 +190,9 @@ else if(plugin_type == "sync"){
             }else{
 
                 try{
-
                     response.result = "SUCCESS";
                     response.message = data_parsed.payload;
                     console.log('[PLUGIN] - '+plugin_name + ': '+ JSON.stringify(response.message, null, "\t"));
-
                 }
                 catch(err){
                     response.result = "ERROR";
@@ -205,9 +200,7 @@ else if(plugin_type == "sync"){
                     console.log('Error parsing '+plugin_name + ' plugin response: '+ response.message);
                 }
 
-
             }
-
 
         });
 
