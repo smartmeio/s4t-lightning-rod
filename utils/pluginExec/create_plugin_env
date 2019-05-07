@@ -1,0 +1,12 @@
+#!/bin/ash
+
+echo "PluginExec Environment Creation"
+
+PLUGIN_ENV="pluginExecTest"
+mkdir -p $PLUGIN_ENV/plugins
+
+echo " - folder "$PLUGIN_ENV" created."
+
+cp -R $NODE_PATH/@mdslab/iotronic-lightning-rod/utils/pluginExec/* $PLUGIN_ENV/
+
+echo " - environment created."
