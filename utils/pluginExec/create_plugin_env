@@ -2,7 +2,7 @@
 
 echo "PluginExec Environment Creation"
 
-PLUGIN_ENV="pluginExecTest"
+PLUGIN_ENV="pluginExec"
 mkdir -p $PLUGIN_ENV/plugins
 
 echo " - folder "$PLUGIN_ENV" created."
