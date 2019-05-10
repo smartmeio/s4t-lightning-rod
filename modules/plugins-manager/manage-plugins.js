@@ -575,17 +575,27 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 	};
 
-	// Remove an existing socket
-	fs.unlink(socketPath, function(){
-			// Create the server, give it our callback handler and listen at the path
+	try{
+		// Remove an existing socket
+		fs.unlink(socketPath, function(){
+				// Create the server, give it our callback handler and listen at the path
 
-			s_server = net.createServer(handler).listen(socketPath, function(){
-				logger.debug('[PLUGIN-SOCKET] - Socket in listening...');
-				logger.debug('[PLUGIN-SOCKET] --> socket: '+socketPath);
-			})
+				s_server = net.createServer(handler).listen(socketPath, function(){
+					logger.debug('[PLUGIN-SOCKET] - Socket in listening...');
+					logger.debug('[PLUGIN-SOCKET] --> socket: '+socketPath);
+				})
 
-		}
-	);
+			}
+		);
+	}
+	catch(err){
+
+		response.result = "ERROR";
+		response.message = '(async) Error unlink socket file: ' + err;
+		logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+		d.resolve(response);
+
+	}
 
 	var options = {
 		mode: 'text',
@@ -612,43 +622,40 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 		//Get the autostart parameter from the schema just uploaded
 		plugin_autostart = pluginsSchemaConf.autostart;
 
-
 	}
 	catch(err){
 
 		response.result = "ERROR";
 		response.message = 'Error parsing plugins.json configuration file: ' + err;
 		logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
-
 		d.resolve(response);
 
 	}
 
+	if (action == "start") {
 
-	if(action == "start") {
+		fs.writeFile(schema_outputFilename, plugin_json, function (err) {
 
-		fs.writeFile(schema_outputFilename, plugin_json, function(err) {
-
-			if(err) {
+			if (err) {
 				response.result = "ERROR";
-				response.message = 'Error opening '+plugin_name+'.json file: ' + err;
-				logger.error('[PLUGIN] - "'+plugin_name + '" - '+response.message);
+				response.message = 'Error opening ' + plugin_name + '.json file: ' + err;
+				logger.error('[PLUGIN] - "' + plugin_name + '" - ' + response.message);
 				d.resolve(response);
 
 			} else {
 
-				logger.info('[PLUGIN] - '+ plugin_name + ' - Plugin JSON schema saved to ' + schema_outputFilename);
+				logger.info('[PLUGIN] - ' + plugin_name + ' - Plugin JSON schema saved to ' + schema_outputFilename);
 
 				// Updating the plugins.json file:
 				// - check if the user changed the autostart parameter at this stage
-				if(plugin_autostart != undefined){
+				if (plugin_autostart != undefined) {
 
 					pluginsConf.plugins[plugin_name].autostart = plugin_autostart;
-					logger.info('[PLUGIN] - '+ plugin_name + ' - Autostart parameter set by user to ' + plugin_autostart);
+					logger.info('[PLUGIN] - ' + plugin_name + ' - Autostart parameter set by user to ' + plugin_autostart);
 
 				} else {
 
-					logger.info('[PLUGIN] - '+ plugin_name + ' - Autostart parameter not changed!');
+					logger.info('[PLUGIN] - ' + plugin_name + ' - Autostart parameter not changed!');
 
 				}
 
@@ -656,12 +663,12 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 				pluginsConf.plugins[plugin_name].status = "on";
 				pluginsConf.plugins[plugin_name].pid = PY_PID;
 
-				fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
+				fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
 
-					if(err) {
-						logger.error('[PLUGIN] - '+ plugin_name + ' - Error opening '+plugin_name+'.json file: ' + err);
+					if (err) {
+						logger.error('[PLUGIN] - ' + plugin_name + ' - Error opening ' + plugin_name + '.json file: ' + err);
 					} else {
-						logger.info('[PLUGIN] - '+ plugin_name + ' - plugins.json updated -> autostart < ' + pluginsConf.plugins[plugin_name].autostart + ' > - status < '+ pluginsConf.plugins[plugin_name].status + ' > ' + pluginsConf.plugins[plugin_name].pid);
+						logger.info('[PLUGIN] - ' + plugin_name + ' - plugins.json updated -> autostart < ' + pluginsConf.plugins[plugin_name].autostart + ' > - status < ' + pluginsConf.plugins[plugin_name].status + ' > ' + pluginsConf.plugins[plugin_name].pid);
 
 						// Start a timer to check every X minutes if the plugin is still alive!
 						exports.pluginKeepAlive(plugin_name, plugin_checksum);
@@ -675,19 +682,19 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 		});
 
 	}
-	else if(action == "restart"){
+	else if (action == "restart") {
 
 
 		// - change the plugin status from "off" to "on" and update the PID value
 		pluginsConf.plugins[plugin_name].status = "on";
 		pluginsConf.plugins[plugin_name].pid = PY_PID;
 
-		fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
+		fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
 
-			if(err) {
-				logger.error('[PLUGIN] - '+ plugin_name + ' - Error opening '+plugin_name+'.json file: ' + err);
+			if (err) {
+				logger.error('[PLUGIN] - ' + plugin_name + ' - Error opening ' + plugin_name + '.json file: ' + err);
 			} else {
-				logger.info('[PLUGIN] - '+ plugin_name + ' - plugins.json updated -> autostart < ' + pluginsConf.plugins[plugin_name].autostart + ' > - status < '+ pluginsConf.plugins[plugin_name].status + ' > ' + pluginsConf.plugins[plugin_name].pid);
+				logger.info('[PLUGIN] - ' + plugin_name + ' - plugins.json updated -> autostart < ' + pluginsConf.plugins[plugin_name].autostart + ' > - status < ' + pluginsConf.plugins[plugin_name].status + ' > ' + pluginsConf.plugins[plugin_name].pid);
 
 			}
 
@@ -709,11 +716,17 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 		if (err){
 
-			PLUGIN_LOGGERS[plugin_name].warn("Plugin '"+plugin_name+"' error logs: \n" + JSON.stringify(err, null, "\t"));
+			try{
+
+				PLUGIN_LOGGERS[plugin_name].warn("Plugin '"+plugin_name+"' error logs: \n" + JSON.stringify(err, null, "\t"));
+			}
+			catch(err){
+				logger.warn('[PLUGIN] - '+plugin_name + ' - Plugin logger error: ' + err);
+				logger.warn("Plugin '"+plugin_name+"' error logs: \n" + JSON.stringify(err, null, "\t"));
+			}
 
 			response.result = "ERROR";
 			response.message = "Error plugin execution: please check plugin logs: \n" + err.traceback;
-			//console.log(err);
 
 			pluginsConf.plugins[plugin_name].status = "off";
 			pluginsConf.plugins[plugin_name].pid = "";
@@ -722,87 +735,92 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 			fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
 
 				if(err) {
-
+					clearPluginTimer(plugin_name);
 					response.result = "ERROR";
 					response.message = 'Error writing plugins.json: '+ err;
 					logger.error('[PLUGIN] - pyshell error in plugin '+plugin_name + ' error: '+response.message);
 					d.resolve(response);
 
 				} else {
-
 					logger.debug("[PLUGIN] --> " + PLUGINS_SETTING + " updated!");
 					clearPluginTimer(plugin_name);
-
 					d.resolve(response);
-
 				}
 
 			})
 
-
 		}
 		else{
 
-			logger.debug('[PLUGIN-SHELL] - Python shell of "'+plugin_name+'" plugin terminated: {signal: '+ signal+', code: '+code+'}');
+			try {
 
-			if(signal == null && code == 0){
+				logger.debug('[PLUGIN-SHELL] - Python shell of "' + plugin_name + '" plugin terminated: {signal: ' + signal + ', code: ' + code + '}');
 
-				logger.warn("[PLUGIN-SHELL] --> unexpected '"+plugin_name+"' plugin termination!");
+				if (signal == null && code == 0) {
 
-				pluginsConf.plugins[plugin_name].status = "off";
-				pluginsConf.plugins[plugin_name].pid = "";
+					logger.warn("[PLUGIN-SHELL] --> unexpected '" + plugin_name + "' plugin termination!");
 
-				// updates the JSON file
-				fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
+					pluginsConf.plugins[plugin_name].status = "off";
+					pluginsConf.plugins[plugin_name].pid = "";
 
-					if(err) {
+					// updates the JSON file
+					fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
 
-						response.result = "ERROR";
-						response.message = 'Error writing plugins.json: '+ err;
-						logger.error('[PLUGIN] - stop plugin '+plugin_name + ' error: '+response.message);
-						d.resolve(response);
+						if (err) {
 
-					} else {
+							response.result = "ERROR";
+							response.message = 'Error writing plugins.json: ' + err;
+							logger.error('[PLUGIN] - stop plugin ' + plugin_name + ' error: ' + response.message);
+							d.resolve(response);
 
-						logger.debug("[PLUGIN] --> " + PLUGINS_SETTING + " updated!");
-						clearPluginTimer(plugin_name);
+						} else {
 
-						iotronic_plugin_status = "failed";
-						session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+							logger.debug("[PLUGIN] --> " + PLUGINS_SETTING + " updated!");
+							clearPluginTimer(plugin_name);
 
-							function (rpc_response) {
+							iotronic_plugin_status = "failed";
+							session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+								function (rpc_response) {
 
-								if (rpc_response.result == "ERROR") {
+									if (rpc_response.result == "ERROR") {
 
-									response.result = "ERROR";
-									response.message = 'Error notification plugin status: '+ rpc_response.message;
-									logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-									d.resolve(response);
+										response.result = "ERROR";
+										response.message = 'Error notification plugin status: ' + rpc_response.message;
+										logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+										d.resolve(response);
+
+									} else {
+
+										logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+
+										response.result = "SUCCESS";
+										response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
+										logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+										d.resolve(response);
+
+									}
 
 								}
-								else {
-
-									logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-
-									response.result = "SUCCESS";
-									response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
-									logger.info("[PLUGIN] - plugin '"+plugin_name + "': "+response.message);
-									d.resolve(response);
-
-								}
-
-							}
-						);
+							);
 
 
-					}
+						}
 
-				});
-				
-			}else{
-				logger.debug("[PLUGIN-SHELL] --> Python plugin '"+plugin_name+"' terminated!")
+					});
+
+				} else {
+					logger.debug("[PLUGIN-SHELL] --> Python plugin '" + plugin_name + "' terminated!")
+				}
+
 			}
+			catch(err){
 
+				response.result = "ERROR";
+				response.message = 'Error in pyshell.end (closing): ' + err;
+				logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+				d.resolve(response);
+
+			}
 		}
 
 
@@ -883,109 +901,113 @@ function pySyncStarter(plugin_name, version, plugin_json) {
 
 	};
 
-	// Remove an existing plugin socket
-	fs.unlink(socketPath, function(){
+	try {
+		// Remove an existing plugin socket
+		fs.unlink(socketPath, function () {
 
-			var plugin_folder = PLUGINS_STORE + plugin_name;
-			var schema_outputFilename = plugin_folder + "/" + plugin_name + '.json';
+				var plugin_folder = PLUGINS_STORE + plugin_name;
+				var schema_outputFilename = plugin_folder + "/" + plugin_name + '.json';
 
-			// Create the server, give it our callback handler and listen at the path
-			s_server = net.createServer(handler).listen(socketPath, function() {
-				logger.debug('[PLUGIN-SOCKET] - Socket in listening...');
-				logger.debug('[PLUGIN-SOCKET] --> socket: '+socketPath);
+				// Create the server, give it our callback handler and listen at the path
+				s_server = net.createServer(handler).listen(socketPath, function () {
 
+					logger.debug('[PLUGIN-SOCKET] - Socket in listening...');
+					logger.debug('[PLUGIN-SOCKET] --> socket: ' + socketPath);
 
-				// after socket creation we will start the plugin wrapper
-				var options = {
-					mode: 'text',
-					pythonPath: '/usr/bin/python3',
-					pythonOptions: ['-u'],
-					scriptPath: __dirname,
-					args: [plugin_name, version, plugin_json]
-				};
+					// after socket creation we will start the plugin wrapper
+					var options = {
+						mode: 'text',
+						pythonPath: '/usr/bin/python3',
+						pythonOptions: ['-u'],
+						scriptPath: __dirname,
+						args: [plugin_name, version, plugin_json]
+					};
 
-				pyshell = new PythonShell('./python/sync-wrapper.py', options);
-				// it will create a python instance like this:
-				// python -u /opt/stack4things/lightning-rod/modules/plugins-manager/python/sync-wrapper.py py_sync {"name":"S4T"}
+					pyshell = new PythonShell('./python/sync-wrapper.py', options);
+					// it will create a python instance like this:
+					// python -u /opt/stack4things/lightning-rod/modules/plugins-manager/python/sync-wrapper.py py_sync {"name":"S4T"}
 
-				logger.debug("[PLUGIN-SHELL] - PID wrapper: "+pyshell.childProcess.pid);
+					logger.debug("[PLUGIN-SHELL] - PID wrapper: " + pyshell.childProcess.pid);
 
-				if(logger.level.levelStr == 'DEBUG')
+					if (logger.level.levelStr == 'DEBUG')
 					// listening 'print' output
-					pyshell.on('message', function (message) {
-						// received a message sent from the Python script (a simple "print" statement)
-						console.log("[PLUGIN-WRAPPER] - PYTHON: "+message);
+						pyshell.on('message', function (message) {
+							// received a message sent from the Python script (a simple "print" statement)
+							console.log("[PLUGIN-WRAPPER] - PYTHON: " + message);
+						});
+
+
+					// end the input stream and allow the process to exit
+					pyshell.end(function (err, code, signal) {
+
+						if (err) {
+
+							response.result = "ERROR";
+							response.message = err;
+							d.resolve(response);
+
+						} else {
+							logger.debug('[PLUGIN-SHELL] - Python shell terminated: {signal: ' + signal + ', code: ' + code + '}');
+						}
+
 					});
 
 
-				// end the input stream and allow the process to exit
-				pyshell.end(function (err, code, signal) {
+					//update parameters and plugins.json conf file
+					fs.writeFile(schema_outputFilename, plugin_json, function (err) {
 
-					if (err){
+						if (err) {
 
-						response.result = "ERROR";
-						response.message = err;
-						d.resolve(response);
+							logger.error('[PLUGIN] --> Error parsing ' + plugin_name + '.json file: ' + err);
 
-					}else{
-						logger.debug('[PLUGIN-SHELL] - Python shell terminated: {signal: '+ signal+', code: '+code+'}');
-					}
+						} else {
 
-				});
+							logger.debug('[PLUGIN] --> Plugin JSON schema saved to ' + schema_outputFilename);
 
+							try {
 
-				//update parameters and plugins.json conf file
-				fs.writeFile(schema_outputFilename, plugin_json, function(err) {
+								//Reading the plugin configuration file
+								var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
 
-					if(err) {
+								// - change the plugin status from "off" to "on" and update the PID value
+								pluginsConf.plugins[plugin_name].status = "on";
+								pluginsConf.plugins[plugin_name].pid = pyshell.childProcess.pid;
 
-						logger.error('[PLUGIN] --> Error parsing '+plugin_name+'.json file: ' + err);
+								//updates the JSON file
+								fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
 
-					} else {
+									if (err) {
+										logger.error('[PLUGIN] --> Error writing plugins.json file: ' + err);
+									} else {
+										logger.debug("[PLUGIN] --> JSON file plugins.json updated -> " + plugin_name + ':  status < ' + pluginsConf.plugins[plugin_name].status + ' > ' + pluginsConf.plugins[plugin_name].pid);
+									}
 
-						logger.debug('[PLUGIN] --> Plugin JSON schema saved to ' + schema_outputFilename);
+								});
 
-						try{
+							} catch (err) {
+								logger.error('Error updating JSON file plugins.json: ' + JSON.stringify(err));
+							}
 
-							//Reading the plugin configuration file
-							var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
-
-							// - change the plugin status from "off" to "on" and update the PID value
-							pluginsConf.plugins[plugin_name].status = "on";
-							pluginsConf.plugins[plugin_name].pid = pyshell.childProcess.pid;
-
-							//updates the JSON file
-							fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
-
-								if(err) {
-									logger.error('[PLUGIN] --> Error writing plugins.json file: ' + err);
-								} else {
-									logger.debug("[PLUGIN] --> JSON file plugins.json updated -> " + plugin_name + ':  status < '+ pluginsConf.plugins[plugin_name].status + ' > ' + pluginsConf.plugins[plugin_name].pid);
-								}
-
-							});
 
 						}
-						catch(err){
-							logger.error('Error updating JSON file plugins.json: '+ JSON.stringify(err));
-						}
+
+					});
 
 
-
-					}
-
-				});
+				})
 
 
-			})
+			}
+		);
+	}
+	catch(err){
 
+		response.result = "ERROR";
+		response.message = '(sync) Error unlink socket file: ' + err;
+		logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+		d.resolve(response);
 
-		}
-
-	);
-
-
-
+	}
 
 	return d.promise;
 
@@ -2096,13 +2118,13 @@ exports.kill = function (args){
 					fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
 
 						if(err) {
-
+							clearPluginTimer(plugin_name);
 							response.result = "ERROR";
 							response.message = 'Error writing plugins.json: '+ err;
 							logger.error('[PLUGIN] - stop plugin '+plugin_name + ' error: '+response.message);
 							d.resolve(response);
-
-						} else {
+						}
+						else {
 							logger.debug("[PLUGIN] --> " + PLUGINS_SETTING + " updated!");
 							clearPluginTimer(plugin_name);
 							response.result = "SUCCESS";
@@ -2396,7 +2418,6 @@ exports.restartPlugin = function(args){
 		var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
 		var plugin_type = pluginsConf.plugins[plugin_name].type;
 
-
 	}
 	catch(err){
 		response.result = "ERROR";
@@ -2451,9 +2472,10 @@ exports.restartPlugin = function(args){
 						);
 
 
-					}else {
+					}
+					else {
 
-						console.log(response)
+						console.log(response);
 
 						response.result = "ERROR";
 						response.message = "Error restarting plugin '" + plugin_name + "' during killing procedure... please retry.";
