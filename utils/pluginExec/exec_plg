@@ -21,7 +21,8 @@
 // ./exec_plg <local|injected> <async|sync> <PLUGIN-NAME>
 
 var fs = require("fs");
-const {PythonShell} = require('python-shell');
+//const {PythonShell} = require('python-shell');
+var PythonShell = require('python-shell');
 var net = require('net');
 
 
