@@ -118,7 +118,15 @@ manageBoard.Init_Ligthning_Rod(function (check) {
 		//----------------------------------------
 		var wampUrl = url_wamp+":"+port_wamp+"/ws";
 
-		wampIP = wampUrl.split("//")[1].split(":")[0];
+		try{
+			wampIP = wampUrl.split("//")[1].split(":")[0];
+
+		}
+		catch(err){
+			logger.warn('[WAMP] - Error in WAMP url format: '+ err);
+			process.exit(1);
+		}
+
 
 		//var wampRealm = nconf.get('config:wamp:realm');
 		var wampRealm = realm;

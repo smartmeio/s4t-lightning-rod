@@ -347,8 +347,13 @@ exports.Init_Ligthning_Rod = function (callback) {
 
         } else {
 
-            log4js.addAppender(log4js.appenders.file(logfile));
-            logger = log4js.getLogger('main');		//service logging configuration: "main"
+            try{
+                log4js.addAppender(log4js.appenders.file(logfile));
+                logger = log4js.getLogger('main');          //service logging configuration: "main"
+            }
+            catch (err) {
+                console.log("Error in log folder creation!")
+            }
 
             LogoLR();
 
