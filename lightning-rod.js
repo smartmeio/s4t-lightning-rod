@@ -160,10 +160,11 @@ manageBoard.Init_Ligthning_Rod(function (check) {
 			logger.info('[WAMP] |--> Realm: '+ wampRealm);
 			logger.info('[WAMP] |--> Session ID: '+ session._id);
 			//logger.debug('[WAMP] |--> Connection details:\n'+ JSON.stringify(details));
-			logger.info('[WAMP] |--> socket check timing: '+ wamp_socket_recovery + " - Timing: " + rpc_alive_time + " seconds");
 
 			//--WAMP-RECOVERY-SYSTEM-INIT-------------------------------------------------------------------------------
 			if(wamp_socket_recovery == true || wamp_socket_recovery == "true") {
+
+				logger.info('[WAMP] |--> socket check timing: '+ wamp_socket_recovery + " - Timing: " + rpc_alive_time + " seconds");
 
 				RECOVERY_SESSION = session;
 				socketNotAlive = false;

@@ -1456,7 +1456,7 @@ exports.pluginsBootLoader = function (){
 
 						if(enabled_num > 0) {
 
-							logger.info('[PLUGIN] |- Restarting enabled plugins on the device: ');
+							logger.info('[PLUGIN] - Restarting enabled plugins on the device: ');
 
 							for (var i = 0; i < enabled_num; i++) {
 
@@ -1501,7 +1501,8 @@ exports.pluginsBootLoader = function (){
 			}
 
 
-		}else{
+		}
+		else{
 			logger.info('[PLUGIN] - No enabled plugins to be restarted!');
 		}
 		
@@ -1579,7 +1580,7 @@ exports.pluginsLoader = function (){
 
 										if(enabled_num > 0) {
 
-											logger.info('[PLUGIN] |- Restarting enabled plugins on the device: ');
+											logger.info('[PLUGIN] - Restarting enabled plugins on the device: ');
 											//console.log(enabledPlugins);
 
 											for (var i = 0; i < enabled_num; i++) {
@@ -1591,7 +1592,6 @@ exports.pluginsLoader = function (){
 													var autostart = enabledPlugins.plugins[plugin_name].autostart;
 													var plugin_type = enabledPlugins.plugins[plugin_name].type;
 													var plugin_version = enabledPlugins.plugins[plugin_name].version;
-
 
 													if(plugin_type == "nodejs")
 														var ext = '.js';
@@ -2601,6 +2601,8 @@ exports.Boot = function (){
 
 			exports.pluginsBootLoader();
 
+			logger.warn( '[PLUGIN] - Plugins will start without checksum check!');
+
 			checkIotronicWampConnection = setInterval(function(){
 
 				logger.warn("[PLUGIN-CONNECTION-RECOVERY] - RETRY...");
@@ -2701,8 +2703,14 @@ exports.Boot = function (){
 				}
 				catch(err){
 					logger.warn('[PLUGIN-CONNECTION-RECOVERY] - Internet connection available BUT wamp session not established!');
-					if(PLUGIN_MODULE_LOADED == false)
+					logger.warn("WAMP connection error:" + err);
+					if(PLUGIN_MODULE_LOADED == false){
+
 						exports.pluginsBootLoader();
+
+						logger.warn( '[PLUGIN] - Plugin will start without checksum check!');
+
+					}
 
 				}
 
@@ -2715,7 +2723,6 @@ exports.Boot = function (){
 
 
 	}, 5000);
-
 
 
 };
