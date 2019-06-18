@@ -34,7 +34,7 @@ plugin_params = sys.argv[3]
 
 # Globals
 socket_path = '/tmp/plugin-'+plugin_name
-plugin_path = os.environ.get('IOTRONIC_HOME')+"/plugins/"+plugin_name+"/"+plugin_name+".py"
+plugin_path = os.environ.get('IOTRONIC_HOME')+"/plugins/"+plugin_name+"/source/"+plugin_name+".py"
 plugin = imp.load_source("plugin", plugin_path)
 
 
