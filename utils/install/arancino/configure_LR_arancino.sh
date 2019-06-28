@@ -12,7 +12,7 @@ echo " --> WAMP URL: "$3
 echo " --> WSTUN URL: "$4
 echo -e "\n"
 
-sed -i "s/\"code\":.*\"\"/\"code\": \"$1\"/g" /etc/iotronic/authentication.json
+sed -i "s/\"code\":.*/\"code\": \"$1\",/g" /etc/iotronic/authentication.json
 sed -i "s/\"layout\":.*\"\"/\"layout\": \"raspberry_pi\"/g" /etc/iotronic/authentication.json
 sed -i "s,\"password\":.*,\"password\": \"$2\",g" /etc/iotronic/authentication.json
 
