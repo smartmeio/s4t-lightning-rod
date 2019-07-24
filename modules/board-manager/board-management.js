@@ -21,27 +21,29 @@ var logger = log4js.getLogger('board-management');
 
 
 var fs = require("fs");
-
-var board_session = null;
-
-var spawn = require('child_process').spawn;
-
-var LIGHTNINGROD_HOME = process.env.LIGHTNINGROD_HOME;
-
-var exec = require('child_process').exec;
+var crypto = require('crypto');
 var Q = require("q");
 
+var exec = require('child_process').exec;
+var spawn = require('child_process').spawn;
+
+var board_session = null;
+var LIGHTNINGROD_HOME = process.env.LIGHTNINGROD_HOME;
 var PKG_MNG_SUPPORTED = ["apt", "apt-get", "pip", "pip3", "opkg"];
 
 
-var crypto = require('crypto');
 function signatureKey() {
 
-    var privateKey = fs.readFileSync('/var/lib/iotronic/ssl/client.key', 'utf-8');
-    var sign = crypto.createSign('RSA-SHA256');
-    sign.update(boardCode); sign.end();
-
-    return sign.sign(privateKey);
+    try {
+        var privateKey = fs.readFileSync('/var/lib/iotronic/ssl/client.key', 'utf-8');
+        var sign = crypto.createSign('RSA-SHA256');
+        sign.update(boardCode);
+        sign.end();
+        return sign.sign(privateKey);
+    }
+    catch(err){
+        logger.error('[SYSTEM] - signatureKey error: ' + JSON.stringify(err));
+    }
 
 }
 
@@ -124,11 +126,18 @@ function checkModEnabled(module_name) {
 
     var d = Q.defer();
 
-    var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
+    try {
 
-    var modules = configFile.config["board"]["modules"]; //console.log(module_name, modules[module_name]);
+        var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
 
-    d.resolve(modules[module_name]["enabled"]);
+        var modules = configFile.config["board"]["modules"]; //console.log(module_name, modules[module_name]);
+
+        d.resolve(modules[module_name]["enabled"]);
+    }
+    catch(err){
+        logger.error('[SYSTEM] - checkModEnabled error: ' + JSON.stringify(err));
+        d.resolve(false);
+    }
 
     return d.promise;
 
@@ -137,86 +146,90 @@ function checkModEnabled(module_name) {
 // This function loads the Lightning-rod modules
 function moduleLoader (session, device) {
 
-    logger.info("[SYSTEM] - Modules loading:");
+    try {
+        logger.info("[SYSTEM] - Modules loading:");
 
-    var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
+        var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
 
-    var modules = configFile.config["board"]["modules"];
+        var modules = configFile.config["board"]["modules"];
 
-    var modules_keys = Object.keys( modules );
+        var modules_keys = Object.keys(modules);
 
-    for (var i = 0; i < modules_keys.length; i++) {
+        for (var i = 0; i < modules_keys.length; i++) {
 
-        (function (i) {
+            (function (i) {
 
-            var module_name = modules_keys[i];
-            var enabled = modules[module_name]["enabled"];
-
-
-            if(enabled)
-
-                switch (module_name) {
-
-                    case 'plugins_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        var pluginsManager = require(LIGHTNINGROD_HOME + '/modules/plugins-manager/manage-plugins');
-                        pluginsManager.Init(session);
-                        break;
-
-                    case 'services_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        var servicesManager = require(LIGHTNINGROD_HOME + '/modules/services-manager/manage-services');
-                        servicesManager.Init(session);
-
-                        break;
-
-                    case 'nodered_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        var nodeRedManager = require(LIGHTNINGROD_HOME + '/modules/nodered-manager/manage-nodered');
-                        nodeRedManager.Init(session);
-                        break;
-
-                    /*
-                    case 'vnets_manager':
-                        break;
-                    */
-
-                    case 'gpio_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        var gpioManager = require(LIGHTNINGROD_HOME + '/modules/gpio-manager/manage-gpio');
-                        gpioManager.Init(session, lyt_device);
-                        break;
-
-                    case 'drivers_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        var driversManager = require(LIGHTNINGROD_HOME + "/modules/drivers-manager/manage-drivers");
-                        driversManager.Init(session);
-                        driversManager.restartDrivers();
-                        break;
-
-                    case 'vfs_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        var fsManager = require(LIGHTNINGROD_HOME + "/modules/vfs-manager/manage-fs");
-                        fsManager.Init(session);
-                        var fsLibsManager = require(LIGHTNINGROD_HOME + "/modules/vfs-manager/manage-fs-libs");
-                        fsLibsManager.exportFSLibs(session);
-                        break;
-
-                    default:
-
-                        //logger.error("[SYSTEM] --> Wrong module: " + module_name)
-
-                        break;
+                var module_name = modules_keys[i];
+                var enabled = modules[module_name]["enabled"];
 
 
+                if (enabled)
 
-                }
+                    switch (module_name) {
+
+                        case 'plugins_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            var pluginsManager = require(LIGHTNINGROD_HOME + '/modules/plugins-manager/manage-plugins');
+                            pluginsManager.Init(session);
+                            break;
+
+                        case 'services_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            var servicesManager = require(LIGHTNINGROD_HOME + '/modules/services-manager/manage-services');
+                            servicesManager.Init(session);
+
+                            break;
+
+                        case 'nodered_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            var nodeRedManager = require(LIGHTNINGROD_HOME + '/modules/nodered-manager/manage-nodered');
+                            nodeRedManager.Init(session);
+                            break;
+
+                        /*
+                        case 'vnets_manager':
+                            break;
+                        */
+
+                        case 'gpio_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            var gpioManager = require(LIGHTNINGROD_HOME + '/modules/gpio-manager/manage-gpio');
+                            gpioManager.Init(session, lyt_device);
+                            break;
+
+                        case 'drivers_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            var driversManager = require(LIGHTNINGROD_HOME + "/modules/drivers-manager/manage-drivers");
+                            driversManager.Init(session);
+                            driversManager.restartDrivers();
+                            break;
+
+                        case 'vfs_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            var fsManager = require(LIGHTNINGROD_HOME + "/modules/vfs-manager/manage-fs");
+                            fsManager.Init(session);
+                            var fsLibsManager = require(LIGHTNINGROD_HOME + "/modules/vfs-manager/manage-fs-libs");
+                            fsLibsManager.exportFSLibs(session);
+                            break;
+
+                        default:
+
+                            //logger.error("[SYSTEM] --> Wrong module: " + module_name)
+
+                            break;
 
 
-        })(i);
+                    }
+
+
+            })(i);
+
+        }
 
     }
-
+    catch(err){
+        logger.error('[SYSTEM] - moduleLoader error: ' + JSON.stringify(err));
+    }
 
 }
 
@@ -224,210 +237,214 @@ function moduleLoader (session, device) {
 // This function loads at boot the Lightning-rod modules
 exports.moduleLoaderOnBoot = function() {
 
-    logger.info("[SYSTEM] - Modules loading:");
+    logger.info("[SYSTEM] - Modules loading on boot:");
 
-    var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
-    var modules = configFile.config["board"]["modules"]; //console.log(modules);
-    var modules_keys = Object.keys( modules ); //console.log(modules_keys);
+    try {
 
+        var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
+        var modules = configFile.config["board"]["modules"]; //console.log(modules);
+        var modules_keys = Object.keys(modules); //console.log(modules_keys);
 
-    //STARTING ENABLED MANAGERS
-    for (var i = 0; i < modules_keys.length; i++) {
+        //STARTING ENABLED MANAGERS
+        for (var i = 0; i < modules_keys.length; i++) {
 
-        (function (i) {
+            (function (i) {
 
-            var module_name = modules_keys[i];
-            var enabled = modules[module_name]["boot"];
-            
-            if(enabled)
+                var module_name = modules_keys[i];
+                var enabled = modules[module_name]["boot"];
 
-                switch (module_name) {
+                if (enabled)
 
-                    case 'plugins_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        var pluginsManager = require(LIGHTNINGROD_HOME + '/modules/plugins-manager/manage-plugins');
-                        pluginsManager.Boot();
-                        break;
+                    switch (module_name) {
 
-                    case 'services_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        var servicesManager = require(LIGHTNINGROD_HOME + '/modules/services-manager/manage-services');
-                        servicesManager.Boot();
-                        break;
+                        case 'plugins_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            var pluginsManager = require(LIGHTNINGROD_HOME + '/modules/plugins-manager/manage-plugins');
+                            pluginsManager.Boot();
+                            break;
 
-                    case 'nodered_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        var nodeRedManager = require(LIGHTNINGROD_HOME + '/modules/nodered-manager/manage-nodered');
-                        nodeRedManager.Boot();
-                        break;
+                        case 'services_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            var servicesManager = require(LIGHTNINGROD_HOME + '/modules/services-manager/manage-services');
+                            servicesManager.Boot();
+                            break;
 
-                    case 'vnets_manager':
-                     logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                    break;
+                        case 'nodered_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            var nodeRedManager = require(LIGHTNINGROD_HOME + '/modules/nodered-manager/manage-nodered');
+                            nodeRedManager.Boot();
+                            break;
 
-                    case 'gpio_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        break;
+                        case 'vnets_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            break;
 
-                    case 'drivers_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
-                        break;
+                        case 'gpio_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            break;
 
-                    case 'vfs_manager':
-                        logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                        case 'drivers_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
+                            break;
 
-                    default:
+                        case 'vfs_manager':
+                            logger.info("[SYSTEM] --> " + module_name + ": " + enabled);
 
-                        logger.warn("[SYSTEM] --> Wrong module: " + module_name);
+                        default:
 
-                        break;
+                            logger.warn("[SYSTEM] --> Wrong module: " + module_name);
 
-
-                }
+                            break;
 
 
-        })(i);
-
-    }
+                    }
 
 
-    //START BOARD-MANAGER CONNECTIONS TESTS PROCEDURES
-    if(wamp_socket_recovery == true || wamp_socket_recovery == "true") {
+            })(i);
 
-        logger.info('[BOOT] - Board Manager connection controller starting...');
-        logger.info('[BOOT] --> Crossbar IP: ' + wampIP + " - Port: " + port_wamp);
+        }
 
-        // connectionTester: library used to check the reachability of Iotronic-Server/WAMP-Server
-        var connectionTester = require('connection-tester');
+        //START BOARD-MANAGER CONNECTIONS TESTS PROCEDURES
+        if (wamp_socket_recovery == true || wamp_socket_recovery == "true") {
 
-        conn_alive_timer = 60; //second between check-connection retries
-        conn_retry_counter = 0; //counter for check-connection retries
+            logger.info('[BOOT] - Board Manager connection controller starting...');
+            logger.info('[BOOT] --> Crossbar IP: ' + wampIP + " - Port: " + port_wamp);
 
-        setTimeout(function () {
+            // connectionTester: library used to check the reachability of Iotronic-Server/WAMP-Server
+            var connectionTester = require('connection-tester');
 
-            var output = connectionTester.test(wampIP, port_wamp, 10000);
-            var reachable = output.success;
-            var error_test = output.error;
+            conn_alive_timer = 60; //second between check-connection retries
+            conn_retry_counter = 0; //counter for check-connection retries
 
-            if (!reachable) {
+            setTimeout(function () {
 
-                //CONNECTION STATUS: FALSE
-                logger.warn("[BOARD-CONNECTION-RECOVERY] - INTERNET CONNECTION STATUS: " + reachable + " - ERROR: " + error_test);
+                var output = connectionTester.test(wampIP, port_wamp, 10000);
+                var reachable = output.success;
+                var error_test = output.error;
 
-                checkInternetWampConnection = setInterval(function () {
+                if (!reachable) {
 
-                    //logger.warn("[BOARD-CONNECTION-RECOVERY] - RETRY...");
+                    //CONNECTION STATUS: FALSE
+                    logger.warn("[BOARD-CONNECTION-RECOVERY] - INTERNET CONNECTION STATUS: " + reachable + " - ERROR: " + error_test);
 
-                    connectionTester.test(wampIP, port_wamp, 10000, function (err, output) {
+                    checkInternetWampConnection = setInterval(function () {
 
-                        var reachable = output.success;
-                        var error_test = output.error;
+                        //logger.warn("[BOARD-CONNECTION-RECOVERY] - RETRY...");
 
-                        if (!reachable) {
+                        connectionTester.test(wampIP, port_wamp, 10000, function (err, output) {
 
-                            //CONNECTION STATUS: FALSE
-                            logger.warn("[BOARD-CONNECTION-RECOVERY] - INTERNET CONNECTION STATUS: " + reachable + " - ERROR: " + error_test);
+                            var reachable = output.success;
+                            var error_test = output.error;
 
-                        } else {
+                            if (!reachable) {
 
-                            try {
+                                //CONNECTION STATUS: FALSE
+                                logger.warn("[BOARD-CONNECTION-RECOVERY] - INTERNET CONNECTION STATUS: " + reachable + " - ERROR: " + error_test);
 
-                                // Test if IoTronic is connected to the realm
-                                board_session.call("s4t.iotronic.isAlive", [boardCode]).then(
-                                    function (response) {
+                            } else {
 
-                                        conn_retry_counter = 0;
-                                        clearInterval(checkInternetWampConnection);
+                                try {
 
-                                    },
-                                    function (err) {
+                                    // Test if IoTronic is connected to the realm
+                                    board_session.call("s4t.iotronic.isAlive", [boardCode]).then(
+                                        function (response) {
 
-                                        logger.warn("NO WAMP CONNECTION YET!")
+                                            conn_retry_counter = 0;
+                                            clearInterval(checkInternetWampConnection);
 
-                                    }
-                                );
+                                        },
+                                        function (err) {
 
-                            } catch (err) {
-                                logger.warn('[BOARD-CONNECTION-RECOVERY] - Error calling "s4t.iotronic.isAlive"');
+                                            logger.warn("NO WAMP CONNECTION YET!")
+
+                                        }
+                                    );
+
+                                } catch (err) {
+                                    logger.warn('[BOARD-CONNECTION-RECOVERY] - Error calling "s4t.iotronic.isAlive"');
+                                }
+
+
                             }
+
+                        });
+
+
+                    }, conn_alive_timer * 1000);
+
+                } else {
+
+                    checkInternetWampConnection = setInterval(function () {
+
+                        conn_retry_counter = conn_retry_counter + 1;
+
+                        try {
+
+                            // Test if IoTronic is connected to the realm
+                            board_session.call("s4t.iotronic.isAlive", [boardCode]).then(
+                                function (response) {
+
+                                    conn_retry_counter = 0;
+                                    clearInterval(checkInternetWampConnection);
+
+                                },
+                                function (err) {
+
+                                    logger.warn("[CONN-RETRY] - " + conn_retry_counter);
+                                    logger.warn("[BOARD-CONNECTION-RECOVERY] - No WAMP connection yet!")
+
+                                }
+                            );
+
+                        } catch (err) {
+
+                            logger.warn("[CONN-RETRY] - " + conn_retry_counter);
+                            logger.warn('[BOARD-CONNECTION-RECOVERY] - Internet connection available BUT wamp session not established!');
+                            logger.warn("--> WAMP connection error:" + err);
+
+                        }
+
+                        if (conn_retry_counter >= 5) {
+
+                            logger.warn("LR restarting in 5 seconds");
+
+                            restart_time = 5;
+
+                            // activate listener on-exit event after LR exit on-update-conf
+                            process.on("exit", function () {
+
+                                require("child_process").spawn(process.argv.shift(), process.argv, {
+                                    cwd: process.cwd(),
+                                    detached: true,
+                                    stdio: "inherit"
+                                });
+
+                            });
+
+                            //Restarting LR
+                            setTimeout(function () {
+
+                                process.exit();
+
+                            }, restart_time * 1000);
 
 
                         }
 
-                    });
+
+                    }, conn_alive_timer * 1000);
+
+                }
 
 
-                }, conn_alive_timer * 1000);
+            }, 5000);
 
-            } else {
-
-                checkInternetWampConnection = setInterval(function () {
-
-                    conn_retry_counter = conn_retry_counter + 1;
-
-                    try {
-
-                        // Test if IoTronic is connected to the realm
-                        board_session.call("s4t.iotronic.isAlive", [boardCode]).then(
-                            function (response) {
-
-                                conn_retry_counter = 0;
-                                clearInterval(checkInternetWampConnection);
-
-                            },
-                            function (err) {
-
-                                logger.warn("[CONN-RETRY] - " + conn_retry_counter);
-                                logger.warn("[BOARD-CONNECTION-RECOVERY] - No WAMP connection yet!")
-
-                            }
-                        );
-
-                    } catch (err) {
-
-                        logger.warn("[CONN-RETRY] - " + conn_retry_counter);
-                        logger.warn('[BOARD-CONNECTION-RECOVERY] - Internet connection available BUT wamp session not established!');
-                        logger.warn("--> WAMP connection error:" + err);
-
-                    }
-
-                    if (conn_retry_counter >= 5) {
-
-                        logger.warn("LR restarting in 5 seconds");
-
-                        restart_time = 5;
-
-                        // activate listener on-exit event after LR exit on-update-conf
-                        process.on("exit", function () {
-
-                            require("child_process").spawn(process.argv.shift(), process.argv, {
-                                cwd: process.cwd(),
-                                detached: true,
-                                stdio: "inherit"
-                            });
-
-                        });
-
-                        //Restarting LR
-                        setTimeout(function () {
-
-                            process.exit();
-
-                        }, restart_time * 1000);
-
-
-                    }
-
-
-                }, conn_alive_timer * 1000);
-
-            }
-
-
-        }, 5000);
+        }
 
     }
-
+    catch(err){
+        logger.error('[SYSTEM] - moduleLoaderOnBoot error: ' + JSON.stringify(err));
+    }
 
 };
 
@@ -629,27 +646,35 @@ exports.checkSettings = function (callback) {
 
 };
 
+
 // This function sets the coordinates of the device: called by Iotronic via RPC
 exports.setBoardPosition = function (args) {
 
-    var board_position = args[0];
-    //logger.info("[SYSTEM] - Set board position: " + JSON.stringify(board_position));
+    try {
 
-    var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
-    var board_config = configFile.config["board"];
-    logger.info("[SYSTEM] --> BOARD CONFIGURATION " + JSON.stringify(board_config));
+        var board_position = args[0];
+        //logger.info("[SYSTEM] - Set board position: " + JSON.stringify(board_position));
 
-    board_config["position"] = board_position;
-    logger.info("[SYSTEM] --> BOARD POSITION UPDATED: " + JSON.stringify(board_config["position"]));
+        var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
+        var board_config = configFile.config["board"];
+        logger.info("[SYSTEM] --> BOARD CONFIGURATION " + JSON.stringify(board_config));
 
-    //Updates the settings.json file
-    fs.writeFile(SETTINGS, JSON.stringify(configFile, null, 4), function (err) {
-        if (err) {
-            logger.error('[SYSTEM] --> Error writing settings.json file: ' + err);
-        } else {
-            logger.debug("[SYSTEM] --> settings.json configuration file saved to " + SETTINGS);
-        }
-    });
+        board_config["position"] = board_position;
+        logger.info("[SYSTEM] --> BOARD POSITION UPDATED: " + JSON.stringify(board_config["position"]));
+
+        //Updates the settings.json file
+        fs.writeFile(SETTINGS, JSON.stringify(configFile, null, 4), function (err) {
+            if (err) {
+                logger.error('[SYSTEM] --> Error writing settings.json file: ' + err);
+            } else {
+                logger.debug("[SYSTEM] --> settings.json configuration file saved to " + SETTINGS);
+            }
+        });
+
+    }
+    catch(err){
+        logger.error('[SYSTEM] - setBoardPosition error: ' + JSON.stringify(err));
+    }
 
     return "Board configuration file updated!";
 
@@ -667,48 +692,58 @@ exports.updateConf = function (args) {
         result: ''
     };
 
-    // activate listener on-exit event after LR exit on-update-conf
-    logger.debug("[SYSTEM] - Listener on process 'exit' event activated:");
-    logger.debug("[SYSTEM] --> Lightning-rod PID: " + process.pid);
-    process.on("exit", function () {
-        require("child_process").spawn(process.argv.shift(), process.argv, {
-            cwd: process.cwd(),
-            detached : true,
-            stdio: "inherit"
+    try {
+
+        // activate listener on-exit event after LR exit on-update-conf
+        logger.debug("[SYSTEM] - Listener on process 'exit' event activated:");
+        logger.debug("[SYSTEM] --> Lightning-rod PID: " + process.pid);
+        process.on("exit", function () {
+            require("child_process").spawn(process.argv.shift(), process.argv, {
+                cwd: process.cwd(),
+                detached: true,
+                stdio: "inherit"
+            });
         });
-    });
 
 
-    var remote_conf = args[0].message;
+        var remote_conf = args[0].message;
 
-    logger.info("[SYSTEM] - Board configuration injected: " + JSON.stringify(remote_conf, null, "\t"));
+        logger.info("[SYSTEM] - Board configuration injected: " + JSON.stringify(remote_conf, null, "\t"));
 
-    logger.info("[SYSTEM] --> BOARD CONF UPDATED: " + JSON.stringify(remote_conf));
+        logger.info("[SYSTEM] --> BOARD CONF UPDATED: " + JSON.stringify(remote_conf));
 
-    //Updates the settings.json file
-    fs.writeFile(SETTINGS, JSON.stringify(remote_conf, null, "\t"), function (err) {
-        if (err) {
+        //Updates the settings.json file
+        fs.writeFile(SETTINGS, JSON.stringify(remote_conf, null, "\t"), function (err) {
+            if (err) {
 
-            response.message = 'Error writing settings.json file: ' + err;
-            response.result = "ERROR";
-            logger.error('[SYSTEM] --> ' +response.message);
-            d.resolve(response);
+                response.message = 'Error writing settings.json file: ' + err;
+                response.result = "ERROR";
+                logger.error('[SYSTEM] --> ' + response.message);
+                d.resolve(response);
 
-        } else {
+            } else {
 
-            logger.debug("[SYSTEM] --> settings.json configuration file saved to " + SETTINGS);
-            response.message = "Board '"+boardCode+"' configuration updated!";
-            response.result = "SUCCESS";
-            d.resolve(response);
+                logger.debug("[SYSTEM] --> settings.json configuration file saved to " + SETTINGS);
+                response.message = "Board '" + boardCode + "' configuration updated!";
+                response.result = "SUCCESS";
+                d.resolve(response);
 
-            //Restarting LR
-            setTimeout(function () {
-                process.exit();
-            }, 1000)
+                //Restarting LR
+                setTimeout(function () {
+                    process.exit();
+                }, 1000)
 
 
-        }
-    });
+            }
+        });
+
+    }
+    catch(err){
+        response.result = "ERROR";
+        response.message = JSON.stringify(err);
+        logger.error('[SYSTEM] - updateConf error: '+response.message);
+        d.resolve(response);
+    }
 
     return d.promise;
 
@@ -718,10 +753,6 @@ exports.updateConf = function (args) {
 // This function update the board configuration
 exports.setConf = function (args) {
 
-    var remote_conf = args[0].message;
-
-    logger.info("[SYSTEM] - Board configuration injected: " + JSON.stringify(remote_conf, null, "\t"));
-
     var d = Q.defer();
 
     var response = {
@@ -729,42 +760,55 @@ exports.setConf = function (args) {
         result: ''
     };
 
-    // activate listener on-exit event after LR exit on-update-conf
-    logger.debug("[SYSTEM] --> Listener on process 'exit' event activated:");
-    logger.debug("[SYSTEM] --> Lightning-rod PID: " + process.pid);
-    process.on("exit", function () {
-        require("child_process").spawn(process.argv.shift(), process.argv, {
-            cwd: process.cwd(),
-            detached : true,
-            stdio: "inherit"
+    try {
+
+        var remote_conf = args[0].message;
+
+        logger.info("[SYSTEM] - Board configuration injected: " + JSON.stringify(remote_conf, null, "\t"));
+
+
+        // activate listener on-exit event after LR exit on-update-conf
+        logger.debug("[SYSTEM] --> Listener on process 'exit' event activated:");
+        logger.debug("[SYSTEM] --> Lightning-rod PID: " + process.pid);
+        process.on("exit", function () {
+            require("child_process").spawn(process.argv.shift(), process.argv, {
+                cwd: process.cwd(),
+                detached: true,
+                stdio: "inherit"
+            });
         });
-    });
 
 
-    logger.info("[SYSTEM] --> Updating board configuration: " + JSON.stringify(remote_conf));
+        logger.info("[SYSTEM] --> Updating board configuration: " + JSON.stringify(remote_conf));
 
-    //Updates the settings.json file
-    fs.writeFile(SETTINGS, JSON.stringify(remote_conf, null, "\t"), function (err) {
-        if (err) {
+        //Updates the settings.json file
+        fs.writeFile(SETTINGS, JSON.stringify(remote_conf, null, "\t"), function (err) {
+            if (err) {
 
-            response.message = 'Error writing settings.json file: ' + err;
-            response.result = "ERROR";
-            logger.error('[SYSTEM] --> ' +response.message);
-            d.resolve(response);
+                response.message = 'Error writing settings.json file: ' + err;
+                response.result = "ERROR";
+                logger.error('[SYSTEM] --> ' + response.message);
+                d.resolve(response);
 
-        } else {
+            } else {
 
-            logger.debug("[SYSTEM] --> settings.json configuration file saved to " + SETTINGS);
-            response.message = "Board '"+boardCode+"' configuration updated!";
-            response.lr_version = LR_VERSION;
-            response.result = "SUCCESS";
-            d.resolve(response);
-
-
+                logger.debug("[SYSTEM] --> settings.json configuration file saved to " + SETTINGS);
+                response.message = "Board '" + boardCode + "' configuration updated!";
+                response.lr_version = LR_VERSION;
+                response.result = "SUCCESS";
+                d.resolve(response);
 
 
-        }
-    });
+            }
+        });
+
+    }
+    catch(err){
+        response.result = "ERROR";
+        response.message = JSON.stringify(err);
+        logger.error('[SYSTEM] - setConf error: '+response.message);
+        d.resolve(response);
+    }
 
     return d.promise;
 
@@ -774,7 +818,7 @@ exports.setConf = function (args) {
 // This function manages the registration status of the board
 exports.checkRegistrationStatus = function(args){
 
-    var regStatus = args[0];
+    var d = Q.defer();
 
     var response = {
         message: '',
@@ -782,111 +826,111 @@ exports.checkRegistrationStatus = function(args){
         result: ''
     };
 
-    var d = Q.defer();
+    try {
 
-    if(regStatus.result == "SUCCESS"){
+        var regStatus = args[0];
 
-        logger.info("[SYSTEM] - Connection to Iotronic "+regStatus.result+":\n"+JSON.stringify(regStatus.message, null, "\t"));
+        if (regStatus.result == "SUCCESS") {
 
-        //export RPC 
-        exports.exportManagementCommands(board_session);
+            logger.info("[SYSTEM] - Connection to Iotronic " + regStatus.result + ":\n" + JSON.stringify(regStatus.message, null, "\t"));
 
-        if(regStatus.message['state'] == "new"){
+            //export RPC
+            exports.exportManagementCommands(board_session);
 
-            logger.info('[CONFIGURATION] - New board configuration started... ');
+            if (regStatus.message['state'] == "new") {
 
-            var confBundle = {
-                message: ''
-            };
+                logger.info('[CONFIGURATION] - New board configuration started... ');
 
-            confBundle.message = regStatus.message['conf'];
+                var confBundle = {
+                    message: ''
+                };
 
-            exports.setConf([confBundle]).then(
+                confBundle.message = regStatus.message['conf'];
 
-                function (msg) {
+                exports.setConf([confBundle]).then(
+                    function (msg) {
 
-                    console.log(msg);
+                        console.log(msg);
 
-                    d.resolve(msg);
-                    
-                    //Restarting LR
-                    setTimeout(function () {
-                        process.exit();
-                    }, 2000)
+                        d.resolve(msg);
+
+                        //Restarting LR
+                        setTimeout(function () {
+                            process.exit();
+                        }, 2000)
 
 
-                }
+                    }
+                )
 
-            )
 
+            } else if (regStatus.message['state'] == "registered") {
+
+                logger.info("[SYSTEM] - Board registered - Start module loading... ");
+
+                moduleLoader(board_session, lyt_device);
+
+                response.message = "Board '" + boardCode + "' is loading modules.";
+                response.result = "SUCCESS";
+                d.resolve(response);
+
+
+            } else if (regStatus.message['state'] == "updated") {
+
+                logger.info('[CONFIGURATION] - Updated board configuration started... ');
+
+                var confBundle = {
+                    message: ''
+                };
+
+                confBundle.message = regStatus.message['conf'];
+
+                exports.setConf([confBundle]).then(
+                    function (msg) {
+
+                        console.log(msg);
+
+                        d.resolve(msg);
+
+                        //Restarting LR
+                        setTimeout(function () {
+                            process.exit();
+                        }, 2000)
+
+
+                    }
+                )
+
+            } else {
+
+                d.resolve("Board " + boardCode + " in wrong status!");
+
+                logger.error('[CONFIGURATION] - WRONG BOARD STATUS: status allowed "new" or "registerd"!');
+                process.exit();
+
+            }
 
 
         }
-        else if(regStatus.message['state'] == "registered"){
+        else {
 
-            logger.info("[SYSTEM] - Board registered - Start module loading... ");
+            // IF access to IoTronic was rejected
+            logger.error("[SYSTEM] - Connection to Iotronic " + regStatus.result + " - " + regStatus.message);
+            logger.info("[SYSTEM] - Bye");
 
-            moduleLoader(board_session, lyt_device);
+            d.resolve("Board " + boardCode + " disconnection...");
 
-            response.message = "Board '"+boardCode+"' is loading modules.";
-            response.result = "SUCCESS";
-            d.resolve(response);
-            
-
-        }
-        else if(regStatus.message['state'] == "updated"){
-
-            logger.info('[CONFIGURATION] - Updated board configuration started... ');
-
-            var confBundle = {
-                message: ''
-            };
-
-            confBundle.message = regStatus.message['conf'];
-
-            exports.setConf([confBundle]).then(
-
-                function (msg) {
-
-                    console.log(msg);
-
-                    d.resolve(msg);
-
-                    //Restarting LR
-                    setTimeout(function () {
-                        process.exit();
-                    }, 2000)
-
-
-                }
-
-            )
-
-        }
-        else{
-
-            d.resolve("Board "+boardCode+" in wrong status!");
-
-            logger.error('[CONFIGURATION] - WRONG BOARD STATUS: status allowed "new" or "registerd"!');
             process.exit();
 
         }
-        
 
     }
-    else {
-        
-        // IF access to IoTronic was rejected
-        logger.error("[SYSTEM] - Connection to Iotronic " + regStatus.result + " - " + regStatus.message);
-        logger.info("[SYSTEM] - Bye");
-
-        d.resolve("Board " + boardCode + " disconnection...");
-
-        process.exit();
-        
+    catch(err){
+        response.result = "ERROR";
+        response.message = JSON.stringify(err);
+        logger.error('[SYSTEM] - checkRegistrationStatus error: '+response.message);
+        d.resolve(response);
     }
-
-
     return d.promise;
 
 };
@@ -904,52 +948,58 @@ exports.updateLR = function(args){
         result: ''
     };
 
-    var lr_version = args[0];
-    var pkg_mng = args[1];
-    var operation = args[2];
+    try {
 
-    var lr_pkg_name = "node-iotronic-lightning-rod";
-    
-    if (pkg_mng == "opkg"){
-        
-        var pkg_name = lr_pkg_name;
-        
-    }else if (pkg_mng == "apt" || pkg_mng == "apt-get"){
+        var lr_version = args[0];
+        var pkg_mng = args[1];
+        var operation = args[2];
 
-        if(lr_version != undefined && lr_version != "")
-            var pkg_name = lr_pkg_name+"="+lr_version;
-        else
+        var lr_pkg_name = "node-iotronic-lightning-rod";
+
+        if (pkg_mng == "opkg") {
+
             var pkg_name = lr_pkg_name;
 
+        } else if (pkg_mng == "apt" || pkg_mng == "apt-get") {
+
+            if (lr_version != undefined && lr_version != "")
+                var pkg_name = lr_pkg_name + "=" + lr_version;
+            else
+                var pkg_name = lr_pkg_name;
+
+        }
+
+        var pkg_opts = "";
+
+        if (operation == "update" || operation == undefined || operation == "") {
+
+            var pkg_mng_cmd = "install";
+
+            managePackage(pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, function (pack) {
+
+                pack.lr_version = exports.getLRversion();
+
+                console.log(pack);
+
+                d.resolve(pack);
+
+            });
+
+        } else {
+
+            response.message = "Operation '" + operation + "' on Lightning-rod package not supported!";
+            response.result = "ERROR";
+            logger.error("[SYSTEM] --> " + response.message);
+            d.resolve(response);
+        }
+
     }
-
-    var pkg_opts = "";
-
-    if(operation == "update" || operation == undefined || operation == ""){
-
-        var pkg_mng_cmd = "install";
-
-        managePackage(pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, function (pack) {
-
-            pack.lr_version = exports.getLRversion();
-
-            console.log(pack);
-
-            d.resolve(pack);
-
-        });
-
-    }
-    else{
-
-        response.message = "Operation '"+operation+"' on Lightning-rod package not supported!";
+    catch(err){
         response.result = "ERROR";
-        logger.error("[SYSTEM] --> " + response.message);
+        response.message = JSON.stringify(err);
+        logger.error('[SYSTEM] - updateLR error: '+response.message);
         d.resolve(response);
     }
-
-
-
 
     return d.promise;
 
@@ -958,181 +1008,342 @@ exports.updateLR = function(args){
 // To execute pre-defined commands in the board shell
 exports.execAction = function(args){
 
-    var d = Q.defer();
-
     var action = args[0];
     var params = args[1];
 
-
     logger.info("[SYSTEM] - execAction on board RPC called: '" + action + "' action...");
 
+    var d = Q.defer();
 
     var response = {
         message: '',
         result: ''
     };
 
-    switch (action) {
+    try {
 
-        case 'reboot':
+        switch (action) {
 
-            logger.info('[SYSTEM] - Rebooting...');
-            response.message = "Rebooting";
-            response.result = "SUCCESS";
-            d.resolve(response);
+            case 'reboot':
 
-            exec('reboot', function(error, stdout, stderr){
+                logger.info('[SYSTEM] - Rebooting...');
+                response.message = "Rebooting";
+                response.result = "SUCCESS";
+                d.resolve(response);
 
-                if(error) {
-                    logger.error('[SYSTEM] - Reboot result: ' + error);
-                    response.message = error;
-                    response.result = "ERROR";
-                    d.resolve(response);
-                }
-                else if (stderr){
-                    if (stderr == "")
-                        stderr = "rebooting...";
+                exec('reboot', function (error, stdout, stderr) {
 
-                    logger.info('[SYSTEM] - Reboot result: ' + stderr);
-                    response.message = stderr;
-                    response.result = "WARNING";
-                    d.resolve(response);
-                }
-                else{
-                    logger.info('[SYSTEM] - Reboot result: ' + stdout);
-                    response.message = stdout;
-                    response.result = "SUCCESS";
-                    d.resolve(response);
-                }
+                    try {
 
+                        if (error) {
+                            logger.error('[SYSTEM] - Reboot result: ' + error);
+                            response.message = error;
+                            response.logs = error.message;
+                            response.result = "ERROR";
+                            d.resolve(response);
+                        } else if (stderr) {
+                            if (stderr == "")
+                                stderr = "rebooting...";
 
-            });
-
-            break;
-
-
-        case 'hostname':
-
-            exec('echo `hostname`@`date`', function(error, stdout, stderr){
-
-                if(error) {
-                    logger.error('[SYSTEM] - Echo result: ' + error);
-                    response.message = error;
-                    response.result = "ERROR";
-                    d.resolve(response);
-                }
-                else if (stderr){
-                    if (stderr == "")
-                        stderr = "Doing echo...";
-
-                    logger.info('[SYSTEM] - Echo result: ' + stderr);
-                    response.message = stderr;
-                    response.result = "WARNING";
-                    d.resolve(response);
-                }
-                else{
-                    stdout = stdout.replace(/\n$/, '');
-                    logger.info('[SYSTEM] - Echo result: ' + stdout);
-                    response.message = stdout;
-                    response.result = "SUCCESS";
-                    d.resolve(response);
-                }
-
-            });
-            break;
+                            logger.info('[SYSTEM] - Reboot result: ' + stderr);
+                            response.message = stderr;
+                            response.result = "WARNING";
+                            d.resolve(response);
+                        } else {
+                            logger.info('[SYSTEM] - Reboot result: ' + stdout);
+                            response.message = stdout;
+                            response.result = "SUCCESS";
+                            d.resolve(response);
+                        }
+                    }
+                    catch(err){
+                        response.result = "ERROR";
+                        response.message = JSON.stringify(err);
+                        logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                        d.resolve(response);
+                    }
 
 
-        case 'pkg_manager':
-
-
-            try{
-
-                //var params = JSON.parse(params);
-                logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params));
-
-            }
-            catch (err) {
-
-                response.message = "Error parsing package parameters: " + JSON.stringify(err);
-                response.result = "ERROR";
-                logger.error("[SYSTEM] --> " + response.message);
-                //d.resolve(response);
-
-            }
-
-            var pkg_mng = params["pkg_mng"];
-            var pkg_mng_cmd = params["pkg_mng_cmd"];
-            var pkg_name = params["pkg_name"];
-            var pkg_opts = params["pkg_opts"];
-
-            managePackage(pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, function (pack) {
-
-                d.resolve(pack);
-
-            });
-
-            break;
-
-        case 'restart_lr':
-
-            try{
-                var params = JSON.parse(params);
-
-            }
-            catch (err) {
-                logger.debug("[SYSTEM] --> parsing parameters error: "+JSON.stringify(err));
-
-            }
-
-            if(params == null || params == undefined  || params == "")
-                var restart_time = 5;
-            else{
-                logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params, null, "\t"));
-                var restart_time = params["time"];
-                if(restart_time == null || restart_time == undefined  || restart_time == "")
-                    restart_time = 5;
-
-            }
-
-            // activate listener on-exit event after LR exit on-update-conf
-            logger.debug("[SYSTEM] --> Listener on process 'exit' event activated:");
-            logger.debug("[SYSTEM] --> Lightning-rod PID: " + process.pid);
-            process.on("exit", function () {
-
-                require("child_process").spawn(process.argv.shift(), process.argv, {
-                    cwd: process.cwd(),
-                    detached : true,
-                    stdio: "inherit"
                 });
 
-            });
-
-            logger.info('[SYSTEM] - Restarting Lightning-rod in ' + restart_time + ' seconds...');
-            response.message = "Restarting Lightning-rod on board "+ boardCode;
-            response.result = "SUCCESS";
-            d.resolve(response);
-
-            //Restarting LR
-            setTimeout(function () {
-                
-                process.exit();
-                
-            }, restart_time * 1000);
+                break;
 
 
-            break;
+            case 'hostname':
 
-        default:
-            
-            response.message = "Board operation '" + action + "' not supported!";
-            response.result = 'ERROR';
-            logger.error("[SYSTEM] - " + response.message);
-            d.resolve(response);
+                exec('echo `hostname`@`date`', function (error, stdout, stderr) {
 
-            break;
+                    try {
+
+                        if (error) {
+                            logger.error('[SYSTEM] - Echo result: ' + error);
+                            response.message = error;
+                            response.logs = error.message;
+                            response.result = "ERROR";
+                            d.resolve(response);
+                        } else if (stderr) {
+                            if (stderr == "")
+                                stderr = "Doing echo...";
+
+                            logger.info('[SYSTEM] - Echo result: ' + stderr);
+                            response.message = stderr;
+                            response.result = "WARNING";
+                            d.resolve(response);
+                        } else {
+                            stdout = stdout.replace(/\n$/, '');
+                            logger.info('[SYSTEM] - Echo result: ' + stdout);
+                            response.message = stdout;
+                            response.result = "SUCCESS";
+                            d.resolve(response);
+                        }
+                    }
+                    catch(err){
+                        response.result = "ERROR";
+                        response.message = JSON.stringify(err);
+                        logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                        d.resolve(response);
+                    }
+
+                });
+                break;
+
+
+            case 'mount_status':
+
+                exec('cat /proc/mounts |grep " / \\|sda"', function (error, stdout, stderr) {
+
+                    try {
+
+                        if (error) {
+                            logger.error('[SYSTEM] - Mount status result (error): ' + error);
+                            response.message = error;
+                            response.logs = error.message;
+                            response.result = "ERROR";
+                            d.resolve(response);
+
+                        } else if (stderr) {
+                            if (stderr == "")
+                                stderr = "Getting mount status...";
+
+                            logger.info('[SYSTEM] - Mount status result (stderr): ' + stderr);
+                            response.message = stderr;
+                            response.result = "WARNING";
+                            d.resolve(response);
+
+                        } else {
+                            stdout = stdout.replace(/\n$/, '');
+                            logger.info('[SYSTEM] - Mount status result (stdout): ' + stdout);
+                            response.message = stdout;
+                            response.logs = stdout;
+                            response.result = "SUCCESS";
+                            d.resolve(response);
+                        }
+
+                    }
+                    catch(err){
+                        response.result = "ERROR";
+                        response.message = JSON.stringify(err);
+                        logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                        d.resolve(response);
+                    }
+
+                });
+                break;
+
+
+            case 'mount_ro':
+
+                exec('rootro', function (error, stdout, stderr) {
+
+                    try{
+
+                        if (error) {
+                            logger.error('[SYSTEM] - Mount RO result (error): ' + error);
+                            response.message = error;
+                            response.logs = error.message;
+                            response.result = "ERROR";
+                            d.resolve(response);
+
+                        } else if (stderr) {
+                            if (stderr == "")
+                                stderr = "Mounting FS in read-only...";
+
+                            logger.info('[SYSTEM] - Mount RO result (stderr): ' + stderr);
+                            response.message = stderr;
+                            response.result = "WARNING";
+                            d.resolve(response);
+
+                        } else {
+                            stdout = stdout.replace(/\n$/, '');
+                            logger.info('[SYSTEM] - Mount RO result (stdout): ' + stdout);
+                            response.message = stdout;
+                            response.result = "SUCCESS";
+                            d.resolve(response);
+                        }
+
+                    }
+                    catch(err){
+                        response.result = "ERROR";
+                        response.message = JSON.stringify(err);
+                        logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                        d.resolve(response);
+                    }
+
+                });
+
+                break;
+
+
+            case 'mount_rw':
+
+                exec('rootrw', function (error, stdout, stderr) {
+
+                    try {
+
+                        if (error) {
+                            logger.error('[SYSTEM] - Mount RW result (error): ' + error);
+                            response.message = error;
+                            response.logs = error.message;
+                            response.result = "ERROR";
+                            d.resolve(response);
+
+                        } else if (stderr) {
+                            if (stderr == "")
+                                stderr = "Mounting FS in read-write...";
+
+                            logger.info('[SYSTEM] - Mount RW result (stderr): ' + stderr);
+                            response.message = stderr;
+                            response.result = "WARNING";
+                            d.resolve(response);
+
+                        } else {
+                            stdout = stdout.replace(/\n$/, '');
+                            logger.info('[SYSTEM] - Mount RW result (stdout): ' + stdout);
+                            response.message = stdout;
+                            response.result = "SUCCESS";
+                            d.resolve(response);
+                        }
+
+                    }
+                    catch(err){
+                        response.result = "ERROR";
+                        response.message = JSON.stringify(err);
+                        logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                        d.resolve(response);
+                    }
+
+                });
+                break;
+
+
+            case 'pkg_manager':
+
+                try {
+
+                    //var params = JSON.parse(params);
+                    logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params));
+
+                } catch (err) {
+
+                    response.message = "Error parsing package parameters: " + JSON.stringify(err);
+                    response.result = "ERROR";
+                    logger.error("[SYSTEM] --> " + response.message);
+                    //d.resolve(response);
+
+                }
+
+                var pkg_mng = params["pkg_mng"];
+                var pkg_mng_cmd = params["pkg_mng_cmd"];
+                var pkg_name = params["pkg_name"];
+                var pkg_opts = params["pkg_opts"];
+
+                managePackage(pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, function (pack) {
+
+                    d.resolve(pack);
+
+                });
+
+                break;
+
+
+            case 'restart_lr':
+
+                try {
+
+                    var params = JSON.parse(params);
+
+                } catch (err) {
+                    logger.debug("[SYSTEM] --> parsing parameters error: " + JSON.stringify(err));
+
+                }
+
+                if (params == null || params == undefined || params == "")
+                    var restart_time = 5;
+                else {
+                    logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params, null, "\t"));
+                    var restart_time = params["time"];
+                    if (restart_time == null || restart_time == undefined || restart_time == "")
+                        restart_time = 5;
+
+                }
+
+
+                try {
+
+                    // activate listener on-exit event after LR exit on-update-conf
+                    logger.debug("[SYSTEM] --> Listener on process 'exit' event activated:");
+                    logger.debug("[SYSTEM] --> Lightning-rod PID: " + process.pid);
+                    process.on("exit", function () {
+
+                        require("child_process").spawn(process.argv.shift(), process.argv, {
+                            cwd: process.cwd(),
+                            detached: true,
+                            stdio: "inherit"
+                        });
+
+                    });
+
+                    logger.info('[SYSTEM] - Restarting Lightning-rod in ' + restart_time + ' seconds...');
+                    response.message = "Restarting Lightning-rod on board " + boardCode;
+                    response.result = "SUCCESS";
+                    d.resolve(response);
+
+                    //Restarting LR
+                    setTimeout(function () {
+
+                        process.exit();
+
+                    }, restart_time * 1000);
+
+                }
+                catch(err){
+                    response.result = "ERROR";
+                    response.message = JSON.stringify(err);
+                    logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                    d.resolve(response);
+                }
+
+                break;
+
+
+            default:
+
+                response.message = "Board operation '" + action + "' not supported!";
+                response.result = 'ERROR';
+                logger.error("[SYSTEM] - " + response.message);
+                d.resolve(response);
+
+                break;
+
+        }
 
     }
-
+    catch(err){
+        response.result = "ERROR";
+        response.message = JSON.stringify(err);
+        logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+        d.resolve(response);
+    }
 
     return d.promise;
 
@@ -1146,114 +1357,121 @@ var managePackage = function (pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, callback
         message: '',
         result: ''
     };
-    
-    if(PKG_MNG_SUPPORTED.includes(pkg_mng)){
 
-        if(pkg_opts == "")
-            var install_cmd = pkg_mng + " " + pkg_mng_cmd + " " + pkg_name;
-        else
-            var install_cmd = pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
+    try {
 
+        if (PKG_MNG_SUPPORTED.includes(pkg_mng)) {
 
-        if(pkg_mng == "opkg")
-            if(pkg_opts == "")
-                var install_cmd = "opkg update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_name;
+            if (pkg_opts == "")
+                var install_cmd = pkg_mng + " " + pkg_mng_cmd + " " + pkg_name;
             else
-                var install_cmd = "opkg update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
-
-        logger.debug("[SYSTEM] --> cmd: " + install_cmd);
+                var install_cmd = pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
 
 
-        exec( install_cmd , function(error, stdout, stderr){
+            if (pkg_mng == "opkg")
+                if (pkg_opts == "")
+                    var install_cmd = "opkg update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_name;
+                else
+                    var install_cmd = "opkg update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
 
-            if(error) {
+            logger.debug("[SYSTEM] --> cmd: " + install_cmd);
 
-                var error_msg = error.message;
 
-                logger.error('[SYSTEM] - Package manager result (error):\n' + error);
+            exec(install_cmd, function (error, stdout, stderr) {
 
-                if(pkg_mng == "apt-get" || pkg_mng == "apt"){
-                    var final_result = error_msg.split("\n");
-                    response.message = final_result[final_result.length-2].trim();
-                }else if(pkg_mng == "pip"){
-                    var final_result = error_msg.split("\n");
-                    response.message = final_result[final_result.length-2].trim();
-                }else if(pkg_mng == "opkg"){
-                    var final_result = error_msg.split("\n");
-                    response.message = final_result[final_result.length-2].trim();
-                }else{
-                    var final_result = error_msg.split("\n");
-                    response.message = final_result[1];
-                    //response.message = error;
+                if (error) {
+
+                    var error_msg = error.message;
+
+                    logger.error('[SYSTEM] - Package manager result (error):\n' + error);
+
+                    if (pkg_mng == "apt-get" || pkg_mng == "apt") {
+                        var final_result = error_msg.split("\n");
+                        response.message = final_result[final_result.length - 2].trim();
+                    } else if (pkg_mng == "pip") {
+                        var final_result = error_msg.split("\n");
+                        response.message = final_result[final_result.length - 2].trim();
+                    } else if (pkg_mng == "opkg") {
+                        var final_result = error_msg.split("\n");
+                        response.message = final_result[final_result.length - 2].trim();
+                    } else {
+                        var final_result = error_msg.split("\n");
+                        response.message = final_result[1];
+                        //response.message = error;
+                    }
+
+                    response.logs = error_msg;
+                    response.result = "ERROR";
+
+                    callback(response);
+
+                }
+                else if (stderr) {
+
+                    if (pkg_mng == "apt-get" || pkg_mng == "apt") {
+                        var final_result = stderr.split("\n");
+                        response.message = final_result[final_result.length - 2].trim();
+                        response.result = "SUCCESS";
+                    } else if (pkg_mng == "pip") {
+                        var final_result = stderr.split("\n");
+                        response.message = final_result[final_result.length - 2].trim();
+                        response.result = "WARNING";
+                    } else if (pkg_mng == "opkg") {
+                        var final_result = stderr.split("\n");
+                        response.message = final_result[final_result.length - 2].trim();
+                        response.result = "SUCCESS";
+                    } else {
+                        response.message = stderr;
+                        response.result = "SUCCESS";
+                    }
+
+                    logger.warn('[SYSTEM] - Package manager result (stderr):\n' + stderr);
+                    response.logs = stderr;
+
+                    callback(response);
+                }
+                else if (stdout) {
+
+                    //stdout = stdout.replace(/\n$/, '');
+
+                    if (pkg_mng == "apt-get" || pkg_mng == "apt") {
+                        var final_result = stdout.split("\n");
+                        response.message = final_result[final_result.length - 2].trim();
+                    } else if (pkg_mng == "pip") {
+                        var final_result = stdout.split("\n");
+                        response.message = final_result[final_result.length - 2].trim();
+                    } else if (pkg_mng == "opkg") {
+                        var final_result = stdout.split("\n");
+                        response.message = final_result[final_result.length - 2].trim();
+                    } else {
+                        response.message = stdout;
+                    }
+
+                    logger.info('[SYSTEM] - Package manager result (stdout):\n' + stdout);
+                    response.logs = stdout;
+                    response.result = "SUCCESS";
+
+                    callback(response);
+
                 }
 
-                response.logs = error_msg;
-                response.result = "ERROR";
+            });
 
-                callback(response);
-
-            }
-            else if (stderr){
-
-                if(pkg_mng == "apt-get" || pkg_mng == "apt"){
-                    var final_result = stderr.split("\n");
-                    response.message = final_result[final_result.length-2].trim();
-                    response.result = "SUCCESS";
-                }else if(pkg_mng == "pip"){
-                    var final_result = stderr.split("\n");
-                    response.message = final_result[final_result.length-2].trim();
-                    response.result = "WARNING";
-                }else if(pkg_mng == "opkg"){
-                    var final_result = stderr.split("\n");
-                    response.message = final_result[final_result.length-2].trim();
-                    response.result = "SUCCESS";
-                }else{
-                    response.message = stderr;
-                    response.result = "SUCCESS";
-                }
-
-                logger.warn('[SYSTEM] - Package manager result (stderr):\n' + stderr);
-                response.logs = stderr;
-
-                callback(response);
-            }
-            else if (stdout){
-
-                //stdout = stdout.replace(/\n$/, '');
-
-                if(pkg_mng == "apt-get" || pkg_mng == "apt"){
-                    var final_result = stdout.split("\n");
-                    response.message = final_result[final_result.length-2].trim();
-                }else if(pkg_mng == "pip"){
-                    var final_result = stdout.split("\n");
-                    response.message = final_result[final_result.length-2].trim();
-                }else if(pkg_mng == "opkg"){
-                    var final_result = stdout.split("\n");
-                    response.message = final_result[final_result.length-2].trim();
-                }else{
-                    response.message = stdout;
-                }
-
-                logger.info('[SYSTEM] - Package manager result (stdout):\n' + stdout);
-                response.logs = stdout;
-                response.result = "SUCCESS";
-
-                callback(response);
-
-            }
-
-        });
+        }
+        else {
+            response.message = "Package manager '" + pkg_mng + "' not supported!";
+            response.result = "ERROR";
+            logger.warn('[SYSTEM] - ' + response.message);
+            callback(response);
+        }
 
     }
-    else{
-
-        response.message = "Package manager '"+pkg_mng+"' not supported!";
+    catch(err){
         response.result = "ERROR";
-        logger.warn('[SYSTEM] - ' + response.message);
+        response.message = JSON.stringify(err);
+        logger.error('[SYSTEM] - managePackage error: '+response.message);
         callback(response);
-        //d.resolve(response);
     }
-
 
 
 };
@@ -1261,11 +1479,16 @@ var managePackage = function (pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, callback
 
 exports.getLRversion = function () {
 
-    NPM_CONF = process.env.LIGHTNINGROD_HOME+'/package.json';
-    npm_conf = require('nconf');
-    npm_conf.file ({file: NPM_CONF});
-    lr_v = npm_conf.get('version');
-
+    try {
+        NPM_CONF = process.env.LIGHTNINGROD_HOME + '/package.json';
+        npm_conf = require('nconf');
+        npm_conf.file({file: NPM_CONF});
+        lr_v = npm_conf.get('version');
+    }
+    catch(err){
+        logger.error('[SYSTEM] - getLRversion error: ' + JSON.stringify(err));
+        lr_v = "N/A"
+    }
     return lr_v;
 
 };
