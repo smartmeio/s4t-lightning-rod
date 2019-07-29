@@ -1110,7 +1110,9 @@ exports.execAction = function(args){
 
             case 'mount_status':
 
-                exec('cat /proc/mounts |grep " / \\|sda"', function (error, stdout, stderr) {
+                exec('cat /proc/mounts', function (error, stdout, stderr) {
+
+                    //cat /proc/mounts |grep " / \|sda"
 
                     try {
 
