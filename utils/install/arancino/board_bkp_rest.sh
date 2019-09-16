@@ -15,7 +15,7 @@ if [ "$1" = "backup" ]; then
     	board=`cat /var/lib/iotronic/settings.json | grep label | awk '{print $2}' | tr -d \" | tr -d ,`
     	bkp_filename="bkp_"$board"_"$now_date".tar.gz"
     	echo "-> backup filename: " $bkp_filename
-    	tar zcvf $bkp_filename /var/lib/iotronic /etc/iotronic > /dev/null
+    	tar -hzcvf $bkp_filename /var/lib/iotronic /etc/iotronic > /dev/null
 
 elif [ "$1" = "restore" ]; then
 	if [ "$#" -ne 2 ]; then
@@ -24,7 +24,7 @@ elif [ "$1" = "restore" ]; then
 	fi
 	# RESTORE
 	echo "Restoring Iotronic configuration"
-	tar -xvzf $2 -C /
+	tar -hxvzf $2 -C /
 
 else
         echo "You have to specify:"

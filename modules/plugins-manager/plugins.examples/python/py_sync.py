@@ -23,7 +23,7 @@ from datetime import datetime
 
 def main(plugin_name, params, api):
 
-    logging = api.getLogger(plugin_name);
+    logging = api.getLogger(plugin_name)
 
     now = datetime.now().strftime( "%d %b %Y %H:%M:%S.%f" )
 
