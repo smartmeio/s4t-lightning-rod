@@ -27,10 +27,19 @@ var cp = require('child_process');  	//In order to create a wrapper process for 
 var running = require('is-running');  	//In order to verify if a plugin is alive or not.
 var md5 = require('md5');
 
-var PythonShell = require('python-shell');
+/*
+try{
+	var PythonShell = require('python-shell');
+}
+catch(err){
+	const {PythonShell} = require("python-shell");
+}
+*/
+const {PythonShell} = require("python-shell");
+
 var net = require('net');
 
-var session_plugins = null;
+session_plugins = null;
 
 
 var plugins = {};	// This data structure collects all status information of all plugins started in this LR session
@@ -54,7 +63,6 @@ var PLUGIN_MODULE_LOADED = false;
 
 CHECKSUMS_PLUGINS_LIST = [];
 
-
 // This function checks if the plugin process is still alive otherwise starts it
 function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checksum) {
 
@@ -72,8 +80,15 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 		// The board restarts all the plugins with status "on" (this status happens after a crash of L-R/board) or with autostart parameter set at true (because some plugins need to start at boot time).
 		if (status == "on" || autostart == "true"){
 
-			// if the pid of plugin is empty (wrong status)
-			if (pid == '') {
+
+			if(lyt_device.transition_state == "post-maintenance"){
+
+				if(pid != '' && pid != null){
+					logger.info("[PLUGIN] |----> PID to kill of plugin '"+plugin_name+"': "+ pid);
+					process.kill(pid);
+				}
+
+				skip = "false";
 
 				plugins[plugin_name]={
 					child: "",
@@ -82,35 +97,53 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 					timer: timer
 				}
 
-			}else if( pid == null){
+			}
+			else{
 
-				// if the plugin was just injected it does not have the "pid" field in the plugins.json conf file
-				skip = "true";
+				// if the pid of plugin is empty (wrong status)
+				if (pid == '') {
 
-				plugins[plugin_name]={
-					child: "",
-					pid: pid,
-					alive: null,
-					timer: timer
+					plugins[plugin_name]={
+						child: "",
+						pid: pid,
+						alive: false,
+						timer: timer
+					}
+
 				}
+				else if( pid == null){
 
-			}else{
+					// if the plugin was just injected it does not have the "pid" field in the plugins.json conf file
+					skip = "true";
 
-				// if the pid is specified and the device is in the after reboot status of the device/LR or after a crash of the plugin process
-				plugins[plugin_name]={
-					child: "",
-					pid: pid,
-					alive: running(pid),
-					timer: timer
+					plugins[plugin_name]={
+						child: "",
+						pid: pid,
+						alive: null,
+						timer: timer
+					}
+
+				}
+				else{
+
+					// if the pid is specified and the device is in the after reboot status of the device/LR or after a crash of the plugin process
+					plugins[plugin_name]={
+						child: "",
+						pid: pid,
+						alive: running(pid),
+						timer: timer
+					}
+
 				}
 
 			}
 
-			if( plugins[plugin_name].alive === true ){
+
+			if( plugins[plugin_name].alive === true){
 
 				if(CHECKSUMS_PLUGINS_LIST.length == 0){
 					// the plugin is normally running
-					console.log('[PLUGIN] - PluginChecker - '+ plugin_name + ' with PID: ' + plugins[plugin_name].pid + ' alive: '+ plugins[plugin_name].alive );
+					console.log('[PLUGIN] |----> PluginChecker - "'+ plugin_name + '" with PID: ' + plugins[plugin_name].pid + ' alive: '+ plugins[plugin_name].alive );
 
 				}
 				else{
@@ -124,14 +157,12 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 
 					var plugin_checksum = CHECKSUMS_PLUGINS_LIST[plugin_name];
 
-					//logger.warn(CHECKSUMS_PLUGINS_LIST, plugin_checksum);
-
 					if(checksum != plugin_checksum){
 
 						process.kill(plugins[plugin_name].pid);
-						
+
 						// the plugin is not alive and its checksum mismatches!
-						logger.warn( '[PLUGIN] - PluginChecker - '+ plugin_name + ' - The plugin was modified: checksum mismatches!');
+						logger.warn( '[PLUGIN] - PluginChecker - "'+ plugin_name + '" - The plugin was modified: checksum mismatches!');
 						clearPluginTimer(plugin_name);
 
 						pluginsConf.plugins[plugin_name].status = "off";
@@ -141,7 +172,7 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 						fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
 
 							if(err) {
-								logger.warn('[PLUGIN] --> Error updating '+plugin_name + ' plugin in "plugins.json": '+err);
+								logger.warn('[PLUGIN] --> Error updating "'+plugin_name + '" plugin in "plugins.json": '+err);
 
 							} else {
 
@@ -173,7 +204,7 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 					}
 					else{
 						// the plugin is normally running
-						console.log('[PLUGIN] - PluginChecker - '+ plugin_name + ' with PID: ' + plugins[plugin_name].pid + ' alive: '+ plugins[plugin_name].alive );
+						console.log('[PLUGIN] - PluginChecker - "'+ plugin_name + '" with PID: ' + plugins[plugin_name].pid + ' alive: '+ plugins[plugin_name].alive );
 
 					}
 
@@ -207,7 +238,12 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 				if( (checksum === plugin_checksum) || (CHECKSUMS_PLUGINS_LIST.length == 0) ){
 
 					// the plugin is not alive: we are in the state after a reboot of the device/LR or after a crash of the plugin process
-					logger.warn( '[PLUGIN] - PluginChecker - '+ plugin_name + ' - No such process found with PID '+plugins[plugin_name].pid+'!'+ ' - alive: '+ plugins[plugin_name].alive +' - Checksum accepted ('+checksum+') - Restarting...');
+
+					if(plugins[plugin_name].pid == "")
+						logger.warn( '[PLUGIN] - PluginChecker - "'+ plugin_name + '" - No such process and PID found!'+ ' - alive: '+ plugins[plugin_name].alive +' - Checksum accepted ('+checksum+') - Restarting...');
+					else
+						logger.warn( '[PLUGIN] - PluginChecker - "'+ plugin_name + '" - No such process with PID "'+plugins[plugin_name].pid+'" found!'+ ' - alive: '+ plugins[plugin_name].alive +' - Checksum accepted ('+checksum+') - Restarting...');
+
 
 					// If the schema json file exists the board will create a child_process to restart the plugin and update the status and the PID value
 					if (fs.existsSync(plugin_json_name) === true){
@@ -323,7 +359,7 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 
 								}
 								catch(err){
-									logger.error('[PLUGIN] --> Error starting '+plugin_name+' plugin: ' + err);
+									logger.error('[PLUGIN] --> Error starting "'+plugin_name+'" plugin: ' + err);
 								}
 
 
@@ -406,6 +442,8 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 
 			}
 
+
+
 		}
 
 
@@ -434,7 +472,7 @@ function clearPluginTimer(plugin_name) {
 	  
     }  
     catch(err){
-		logger.error('[PLUGIN] --> Error in clearing timer for plugin '+plugin_name+': '+ err);
+		logger.error('[PLUGIN] --> Error in clearing timer for plugin "'+plugin_name+'": '+ err);
     }
     
 }
@@ -525,6 +563,8 @@ function cleanPluginData(plugin_name){
 
 function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, version) {
 
+	// NB: this function is used also for SYNC plugins that have "autostart" param set "true"
+
 	var d = Q.defer();
 
 	var response = {
@@ -575,8 +615,9 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 	};
 
+	// Remove an existing socket
 	try{
-		// Remove an existing socket
+
 		fs.unlink(socketPath, function(){
 				// Create the server, give it our callback handler and listen at the path
 
@@ -597,17 +638,27 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 	}
 
-	var options = {
-		mode: 'text',
-		pythonPath: '/usr/bin/python3',
-		pythonOptions: ['-u'],
-		scriptPath: __dirname,
-		args: [plugin_name, version, plugin_json]
-	};
 
-	var pyshell = new PythonShell('./python/async-wrapper.py', options);
-	PY_PID = pyshell.childProcess.pid;
-	logger.debug("[PLUGIN-SHELL] - PID wrapper: "+ PY_PID);
+	// START ASYNC PLUGIN (WRAPPER)
+	try {
+
+		var options = {
+			mode: 'text',
+			pythonPath: '/usr/bin/python3',
+			pythonOptions: ['-u'],
+			scriptPath: __dirname,
+			args: [plugin_name, version, plugin_json, JSON.stringify(lyt_device)]
+		};
+
+		var pyshell = new PythonShell('./python/async-wrapper.py', options);
+		PY_PID = pyshell.childProcess.pid;
+		logger.debug("[PLUGIN-SHELL] - PID wrapper: " + PY_PID);
+
+	}
+	catch(err) {
+		logger.error('[PLUGIN] - '+plugin_name + ' - '+JSON.stringify(err) );
+	}
+
 
 	//Creating the plugin json schema
 	var plugin_folder = PLUGINS_STORE + plugin_name;
@@ -632,6 +683,7 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 	}
 
+	// UPDATE PLUGINS SETTINGS
 	if (action == "start") {
 
 		fs.writeFile(schema_outputFilename, plugin_json, function (err) {
@@ -684,7 +736,6 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 	}
 	else if (action == "restart") {
 
-
 		// - change the plugin status from "off" to "on" and update the PID value
 		pluginsConf.plugins[plugin_name].status = "on";
 		pluginsConf.plugins[plugin_name].pid = PY_PID;
@@ -700,8 +751,54 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 		});
 
+		// UPDATE PLUGIN STATUS IN IOTRONIC
+		try{
+
+			iotronic_plugin_status = "booted";
+
+			session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+				function (rpc_response) {
+
+					if (rpc_response.result == "ERROR") {
+
+						response.result = "ERROR";
+						response.message = 'Error notification plugin status: ' + rpc_response.message;
+						logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+
+					} else {
+
+						logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+
+						response.result = "SUCCESS";
+						response.message = "Plugin status updated to '" + iotronic_plugin_status +"'";
+						logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+
+					}
+
+				}
+			);
+		}
+		catch(err){
+
+			response.result = "ERROR";
+
+			if(session_plugins == null){
+				response.message = 'update plugin status error: no Iotronic session established!';
+				logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+			}
+			else{
+				response.message = 'update plugin status error: ' + err;
+				logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+			}
+
+		}
+
 
 	}
+
+
+
+
 
 
 	//if(logger.level.levelStr == 'DEBUG')
@@ -713,6 +810,9 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 	// end the input stream and allow the process to exit
 	pyshell.end(function (err, code, signal) {
+
+		//Reload plugins.json to get latest info
+		var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
 
 		if (err){
 
@@ -758,7 +858,7 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 				if (signal == null && code == 0) {
 
-					logger.warn("[PLUGIN-SHELL] --> unexpected '" + plugin_name + "' plugin termination!");
+					logger.warn("[PLUGIN-SHELL] --> '" + plugin_name + "' plugin exited!");
 
 					pluginsConf.plugins[plugin_name].status = "off";
 					pluginsConf.plugins[plugin_name].pid = "";
@@ -776,32 +876,52 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 						} else {
 
 							logger.debug("[PLUGIN] --> " + PLUGINS_SETTING + " updated!");
-							clearPluginTimer(plugin_name);
+							//clearPluginTimer(plugin_name); //if enabled a plugin exited in "normal" state (not stopped by Iotronic) it will not be reloaded by "autostart": "true"
 
-							iotronic_plugin_status = "failed";
-							session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
-								function (rpc_response) {
+							iotronic_plugin_status = "exited";
 
-									if (rpc_response.result == "ERROR") {
+							try{
+								session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+									function (rpc_response) {
 
-										response.result = "ERROR";
-										response.message = 'Error notification plugin status: ' + rpc_response.message;
-										logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-										d.resolve(response);
+										if (rpc_response.result == "ERROR") {
 
-									} else {
+											response.result = "ERROR";
+											response.message = 'Error notification plugin status: ' + rpc_response.message;
+											logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+											d.resolve(response);
 
-										logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+										} else {
 
-										response.result = "SUCCESS";
-										response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
-										logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
-										d.resolve(response);
+											logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+
+											response.result = "SUCCESS";
+											response.message = "Plugin environment cleaned and Iotronic status updated to '" + iotronic_plugin_status +"'";
+											logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+											d.resolve(response);
+
+										}
 
 									}
+								);
+							}
+							catch(err){
 
+								response.result = "ERROR";
+
+								if(session_plugins == null){
+									response.message = 'update plugin status error: no Iotronic session established!';
+									logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
 								}
-							);
+								else{
+									response.message = 'update plugin status error: ' + err;
+									logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+								}
+
+							}
+
+
+
 
 
 						}
@@ -920,7 +1040,7 @@ function pySyncStarter(plugin_name, version, plugin_json) {
 						pythonPath: '/usr/bin/python3',
 						pythonOptions: ['-u'],
 						scriptPath: __dirname,
-						args: [plugin_name, version, plugin_json]
+						args: [plugin_name, version, plugin_json, JSON.stringify(lyt_device)]
 					};
 
 					pyshell = new PythonShell('./python/sync-wrapper.py', options);
@@ -1412,6 +1532,8 @@ exports.pluginsBootLoader = function (){
 
 	PLUGIN_MODULE_LOADED = true;
 
+	var injected_num = 0;
+
 	try{
 
 		// Get the plugin's configuration.
@@ -1422,11 +1544,11 @@ exports.pluginsBootLoader = function (){
 
 		// Get the number of plugins in the list "plugins_keys" in order to use it in the next loop
 		var plugin_num = plugins_keys.length;
-		logger.debug('[PLUGIN] - Number of installed plugins: '+ plugin_num);
+		logger.info('[PLUGIN] - Number of installed plugins: '+ plugin_num);
 
 		if(plugin_num > 0) {
 
-			var enabledPlugins = { "plugins":{}};
+			var enabledPlugins = { "plugins":{} };
 
 			for (var i = 0; i < plugin_num; i++) {
 
@@ -1436,21 +1558,33 @@ exports.pluginsBootLoader = function (){
 					var status = pluginsConf.plugins[plugin_name].status;
 					var autostart = pluginsConf.plugins[plugin_name].autostart;
 
-					// We have to restart only the plugins:
-					// - that the "autostart" flag is TRUE (boot enabled plugin)
-					// - that were in status "on" (it means that the device it was rebooted or LR crashed) even if "auotstart" is FALSE
-					if (status == "on" || autostart == "true"){
+					var iotronic_dep = pluginsConf.plugins[plugin_name].iotronic_dep;
 
-						enabledPlugins.plugins[plugin_name] = pluginsConf.plugins[plugin_name]
+					if(status != "injected"){
+
+						// LR has to restart only the plugins:
+						// - that the "autostart" flag is TRUE (boot enabled plugin)
+						// - that were in status "on" (it means that the device it was rebooted or LR crashed) even if "autostart" is FALSE
+						if (status == "on" || autostart == "true"){
+
+							if(iotronic_dep == "false"){
+								enabledPlugins.plugins[plugin_name] = pluginsConf.plugins[plugin_name]
+							}
+
+						}
 
 					}
+					else{
+						injected_num = injected_num + 1;
+					}
 
-					if(i==plugin_num-1){
+					if(i == plugin_num - 1){
 
 						var enabled_keys = Object.keys( enabledPlugins["plugins"] );
 						var enabled_num = enabled_keys.length;
 
-						logger.debug('[PLUGIN] - Number of enabled plugins: '+ enabled_num);
+						logger.info('[PLUGIN] --> Number of enabled plugins: '+ enabled_num);
+						logger.info('[PLUGIN] --> Number of injected plugins: '+ injected_num);
 
 						if(enabled_num > 0) {
 
@@ -1475,10 +1609,21 @@ exports.pluginsBootLoader = function (){
 
 									setTimeout(function () {
 
-										//var plugin_checksum = md5(	fs.readFileSync(PLUGINS_STORE + plugin_name + "/"+plugin_name+ext, 'utf8'));
+										var category = pluginsConf.plugins[plugin_name].category;
+
 										var plugin_checksum = CHECKSUMS_PLUGINS_LIST[plugin_name]; //if LR will start without connection to Iotronic this value will be "undefined"
 
-										exports.pluginKeepAlive(plugin_name, plugin_checksum);
+										if (category == "async"){
+											exports.pluginKeepAlive(plugin_name, plugin_checksum);
+
+										}
+										else if (category == "sync"){
+
+											var plugin_json_name = PLUGINS_STORE + plugin_name + "/" + plugin_name + '.json';
+											var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
+											exports.call([plugin_name, plugin_json_schema, plugin_checksum]);
+
+										}
 
 									}, 7000 * i);
 
@@ -1536,6 +1681,8 @@ exports.pluginsLoader = function (){
 					CHECKSUMS_PLUGINS_LIST = rpc_response.message;
 					logger.info("[PLUGIN] --> Plugins checksum list recovered!");
 
+					var injected_num = 0;
+
 					try{
 
 						// Get the plugin's configuration.
@@ -1560,14 +1707,31 @@ exports.pluginsLoader = function (){
 									var status = pluginsConf.plugins[plugin_name].status;
 									var autostart = pluginsConf.plugins[plugin_name].autostart;
 
-									// We have to restart only the plugins:
-									// - that the "autostart" flag is TRUE (boot enabled plugin)
-									// - that were in status "on" (it means that the device it was rebooted or LR crashed) even if "auotstart" is FALSE
-									if (status == "on" || autostart == "true"){
+									var on_maintenance = pluginsConf.plugins[plugin_name].on_maintenance;
 
-										enabledPlugins.plugins[plugin_name] = pluginsConf.plugins[plugin_name]
+
+									if(status != "injected"){
+
+										// We have to restart only the plugins:
+										// - that the "autostart" flag is TRUE (boot enabled plugin)
+										// - that were in status "on" (it means that the device it was rebooted or LR crashed) even if "autostart" is FALSE
+										if (status == "on" || autostart == "true"){
+
+											if( lyt_device.state != "maintenance")
+												enabledPlugins.plugins[plugin_name] = pluginsConf.plugins[plugin_name];
+											else{
+												// LR is in MAINTENANCE
+												if(on_maintenance == "true")
+													enabledPlugins.plugins[plugin_name] = pluginsConf.plugins[plugin_name]
+											}
+
+										}
 
 									}
+									else{
+										injected_num = injected_num + 1;
+									}
+
 
 									if(i==plugin_num-1){
 
@@ -1575,6 +1739,8 @@ exports.pluginsLoader = function (){
 										var enabled_num = enabled_keys.length;
 
 										logger.info('[PLUGIN] --> Number of enabled plugins: '+ enabled_num);
+
+										logger.info('[PLUGIN] --> Number of injected plugins: '+ injected_num);
 
 										if(enabled_num > 0) {
 
@@ -1605,11 +1771,25 @@ exports.pluginsLoader = function (){
 
 														setTimeout(function () {
 
-															exports.pluginKeepAlive(plugin_name, plugin_checksum);
+															var category = pluginsConf.plugins[plugin_name].category;
+
+															if (category == "async"){
+																exports.pluginKeepAlive(plugin_name, plugin_checksum);
+
+															}
+															else if (category == "sync"){
+
+																var plugin_json_name = PLUGINS_STORE + plugin_name + "/" + plugin_name + '.json';
+																var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
+																exports.call([plugin_name, plugin_json_schema, plugin_checksum]);
+
+															}
+
 
 														}, 7000 * i);
 
-													}else{
+													}
+													else{
 
 														logger.warn('[PLUGIN] |--> ' + plugin_name + ' - checksums mismatch: ' + checksum + ' - correct checksum: ' + plugin_checksum);
 
@@ -1774,7 +1954,6 @@ exports.run = function (args){
 					if(PLUGIN_LOGGERS[plugin_name] == undefined){
 						PLUGIN_LOGGERS[plugin_name] = api.getLogger(plugin_name, 'debug');
 					}
-
 
 					// Check the plugin type: "nodejs" or "python"
 					switch (plugin_type) {
@@ -2135,8 +2314,9 @@ exports.injectPlugin = function(args){
 
 		// Parsing the input arguments
 		var plugin_bundle = JSON.parse(args[0]);
-		var autostart = String(args[1]); 	// The autostart parameter is used to set the boot execution configuration of the plugin.
-		var force = String(args[2]); 		// If specified -> overwrite the plugin previously injected
+		var autostart = String(args[1]); 		// The autostart parameter is used to set the boot execution configuration of the plugin.
+		var force = String(args[2]); 			// If specified -> overwrite the plugin previously injected
+		var on_maintenance = String(args[3]); 	// If true the plugin can autostart at boot also when the device is in maintenance state
 
 		var plugin_code = plugin_bundle.code;
 		var plugin_name = plugin_bundle.name;
@@ -2155,13 +2335,10 @@ exports.injectPlugin = function(args){
 
 
 		//UPDATE PLUGIN MANAGEMENT
-		//Reading the plugins configuration file
 		var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
 		if (pluginsConf.plugins[plugin_name] != undefined && pluginsConf.plugins[plugin_name]['version'] != undefined) {
-			//console.log(plugin_bundle.version, pluginsConf.plugins[plugin_name]['version'], pluginsConf.plugins[plugin_name]['pid'] );
 			var prec_v_pid = pluginsConf.plugins[plugin_name]['pid'];
 		}
-
 
 		cleanPluginData(plugin_name).then(
 			function (clean_res) {
@@ -2193,6 +2370,9 @@ exports.injectPlugin = function(args){
 								pluginsConf.plugins[plugin_name] = {};
 								pluginsConf.plugins[plugin_name]['status'] = "injected";
 
+								pluginsConf.plugins[plugin_name]['iotronic_dep'] = plugin_bundle.iotronic_dep;
+								pluginsConf.plugins[plugin_name]['category'] = plugin_bundle.category;
+
 								pluginsConf.plugins[plugin_name]['version'] = plugin_bundle.version;
 								pluginsConf.plugins[plugin_name]['type'] = plugin_bundle.type;
 
@@ -2204,6 +2384,10 @@ exports.injectPlugin = function(args){
 								else
 									pluginsConf.plugins[plugin_name]['autostart'] = false;
 
+								if (on_maintenance != undefined)
+									pluginsConf.plugins[plugin_name]['on_maintenance'] = on_maintenance;
+								else
+									pluginsConf.plugins[plugin_name]['on_maintenance'] = false;
 
 								//Update plugins.json config file
 								fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
@@ -2536,6 +2720,78 @@ exports.getPluginLogs = function(args){
 };
 
 
+// This function update plugins.json file injected by IoTronic
+exports.updatePluginConf = function (args) {
+
+	var d = Q.defer();
+
+	var response = {
+		message: '',
+		result: ''
+	};
+
+	try {
+
+		var new_plugins_conf = {};
+
+		var remote_plugins_conf = args[0].message;
+		var plugins_keys = Object.keys( remote_plugins_conf["plugins"] );
+		var plugin_num = plugins_keys.length;
+
+		//Reading the plugins.json configuration file
+		var local_plugins_conf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
+
+		logger.info("[SYSTEM] - Board configuration injected: " + JSON.stringify(remote_plugins_conf, null, "\t"));
+
+		for (var i = 0; i < plugin_num; i++) {
+
+			(function (i) {
+
+				var plugin_name = plugins_keys[i];
+				remote_plugins_conf.plugins[plugin_name].pid = local_plugins_conf.plugins[plugin_name].pid;
+
+				if(i==plugin_num-1){
+
+					//Updates the plugins.json file
+					fs.writeFile(PLUGINS_SETTING, JSON.stringify(remote_plugins_conf, null, "\t"), function (err) {
+						if (err) {
+
+							response.message = 'Error writing plugins.json file: ' + err;
+							response.result = "ERROR";
+							logger.error('[SYSTEM] --> ' + response.message);
+							d.resolve(response);
+
+						} else {
+
+							logger.debug("[SYSTEM] --> plugins.json configuration file overwritten!");
+							response.message = "Board '" + boardCode + "' plugins configuration updated: restart plugins!";
+							response.result = "SUCCESS";
+							d.resolve(response);
+
+						}
+					});
+
+				}
+
+
+			})(i);
+
+		}
+
+
+	}
+	catch(err){
+		response.result = "ERROR";
+		response.message = JSON.stringify(err);
+		logger.error('[SYSTEM] - updatePluginConf error: '+response.message);
+		d.resolve(response);
+	}
+
+	return d.promise;
+
+};
+
+
 
 //This function exports all the functions in the module as WAMP remote procedure calls
 exports.Init = function (session){
@@ -2550,6 +2806,19 @@ exports.Init = function (session){
 	session.register('s4t.'+ boardCode+'.plugin.remove', exports.removePlugin);
 	session.register('s4t.'+ boardCode+'.plugin.restart', exports.restartPlugin);
 	session.register('s4t.'+ boardCode+'.plugin.logs', exports.getPluginLogs);
+	session.register('s4t.'+ boardCode+'.plugin.updateConf', exports.updatePluginConf);
+
+
+	/*
+	session_plugins.call("s4t.iotronic.plugin.getPLuginsConfs", [boardCode]).then(
+
+		function(response){
+
+			logger.error(JSON.stringify(response.message, null, "\t"));
+
+		}
+	);
+	*/
 
 
     logger.info('[WAMP-EXPORTS] Plugin commands exported to the cloud!');
@@ -2580,9 +2849,9 @@ exports.Boot = function (){
 
 			exports.pluginsBootLoader();
 
-			logger.warn( '[PLUGIN] - Plugins will start without checksum check!');
+			logger.warn( '[PLUGIN-CONNECTION-RECOVERY] - Plugins will start without checksum check!');
 
-			checkIotronicWampConnection = setInterval(function(){
+			checkCrossbarWampConnection = setInterval(function(){
 
 				logger.warn("[PLUGIN-CONNECTION-RECOVERY] - RETRY...");
 
@@ -2621,7 +2890,8 @@ exports.Boot = function (){
 
 												logger.debug("[PLUGIN-CONNECTION-RECOVERY] --> Plugins checksums list recovered: ", CHECKSUMS_PLUGINS_LIST);
 
-												clearInterval( checkIotronicWampConnection );
+												clearInterval( checkCrossbarWampConnection );
+												logger.debug("[PLUGIN-CONNECTION-RECOVERY] --> checkCrossbarWampConnection timer cleared!");
 
 											}
 
@@ -2655,7 +2925,6 @@ exports.Boot = function (){
 		}
 		else{
 
-
 			checkIotronicWampConnection = setInterval(function(){
 
 				try {
@@ -2687,7 +2956,7 @@ exports.Boot = function (){
 
 						exports.pluginsBootLoader();
 
-						logger.warn( '[PLUGIN] - Plugin will start without checksum check!');
+						logger.warn( '[PLUGIN-CONNECTION-RECOVERY] - Plugin will start without checksum check!');
 
 					}
 

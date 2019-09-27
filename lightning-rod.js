@@ -392,6 +392,11 @@ manageBoard.Init_Ligthning_Rod(function (check) {
 			IoT_Device = require('./device/lyt_'+device);
 			lyt_device = new IoT_Device(device);
 			logger.info("[SYSTEM] - Lightning-rod "+ lyt_device.name +" starting...");
+
+			// Update Iotronic device attributes
+			lyt_device.id = boardCode;
+			lyt_device.label = boardLabel;
+
 			lyt_device.Main(wampConnection, logger);
 
 		}

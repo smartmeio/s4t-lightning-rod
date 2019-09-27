@@ -29,6 +29,7 @@ import threading
 plugin_name = sys.argv[1]
 plugin_version = sys.argv[2]
 plugin_params = sys.argv[3]
+lyt_device = sys.argv[4]
 
 
 # Globals
@@ -100,6 +101,10 @@ if __name__ == '__main__':
 
     logging = api.getLogger(plugin_name)
     logging.info(plugin_name + " started with these parameters: " + str(plugin_params) )
+
+    # Set LR STATE for plugins
+    device = json.loads(lyt_device)
+    api._setDeviceEnv(device)
 
     worker = Plugin(
         plugin_params,

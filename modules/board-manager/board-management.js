@@ -162,7 +162,6 @@ function moduleLoader (session, device) {
                 var module_name = modules_keys[i];
                 var enabled = modules[module_name]["enabled"];
 
-
                 if (enabled)
 
                     switch (module_name) {
@@ -242,8 +241,8 @@ exports.moduleLoaderOnBoot = function() {
     try {
 
         var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
-        var modules = configFile.config["board"]["modules"]; //console.log(modules);
-        var modules_keys = Object.keys(modules); //console.log(modules_keys);
+        var modules = configFile.config["board"]["modules"];
+        var modules_keys = Object.keys(modules);
 
         //STARTING ENABLED MANAGERS
         for (var i = 0; i < modules_keys.length; i++) {
@@ -682,6 +681,55 @@ exports.setBoardPosition = function (args) {
 };
 
 
+// This function change LR state
+exports.changeState = function (args) {
+
+    var d = Q.defer();
+
+    var response = {
+        message: '',
+        result: ''
+    };
+
+
+    try {
+
+        // activate listener on-exit event after LR exit
+        process.on("exit", function () {
+            require("child_process").spawn(process.argv.shift(), process.argv, {
+                cwd: process.cwd(),
+                detached: true,
+                stdio: "inherit"
+            });
+        });
+
+        var state = args[0];
+
+        logger.info("[SYSTEM] - Board state changed to '" + state + "', restarting....");
+
+        response.message = "Device '" + boardCode + "' state changed: LR restarting.";
+        response.result = "SUCCESS";
+        d.resolve(response);
+
+        //Restarting LR
+        setTimeout(function () {
+            process.exit();
+        }, 1000)
+
+
+    }
+    catch(err){
+        response.result = "ERROR";
+        response.message = JSON.stringify(err);
+        logger.error('[SYSTEM] - changeState error: '+response.message);
+        d.resolve(response);
+    }
+
+    return d.promise;
+
+};
+
+
 // This function create the settings.json file of the board injected by IoTronic
 exports.updateConf = function (args) {
 
@@ -832,12 +880,22 @@ exports.checkRegistrationStatus = function(args){
 
         if (regStatus.result == "SUCCESS") {
 
+            // Update Iotronic device state
+            lyt_device.state = regStatus.message['state'];
+
             logger.info("[SYSTEM] - Connection to Iotronic " + regStatus.result + ":\n" + JSON.stringify(regStatus.message, null, "\t"));
+
+            // TRANSITION STATE EVALUATION
+            if(lyt_device.state == "post-maintenance"){
+                lyt_device.transition_state = lyt_device.state;
+                lyt_device.state = "registered";
+                logger.info("[SYSTEM] - Transition to state:\n" + JSON.stringify({"transition_state":lyt_device.transition_state, "state": lyt_device.state}, null, "\t"));
+            }
 
             //export RPC
             exports.exportManagementCommands(board_session);
 
-            if (regStatus.message['state'] == "new") {
+            if (lyt_device.state == "new") {
 
                 logger.info('[CONFIGURATION] - New board configuration started... ');
 
@@ -864,9 +922,10 @@ exports.checkRegistrationStatus = function(args){
                 )
 
 
-            } else if (regStatus.message['state'] == "registered") {
+            }
+            else if (lyt_device.state == "registered") {
 
-                logger.info("[SYSTEM] - Board registered - Start module loading... ");
+                logger.info("[SYSTEM] - Board '"+lyt_device.state+"'  - Start module loading... ");
 
                 moduleLoader(board_session, lyt_device);
 
@@ -875,7 +934,19 @@ exports.checkRegistrationStatus = function(args){
                 d.resolve(response);
 
 
-            } else if (regStatus.message['state'] == "updated") {
+            }
+            else if (lyt_device.state == "maintenance") {
+
+                logger.info("[SYSTEM] - Board in '"+lyt_device.state+"' - Start module loading... ");
+
+                moduleLoader(board_session, lyt_device);
+
+                response.message = "Board '" + boardCode + "' is loading modules.";
+                response.result = "SUCCESS";
+                d.resolve(response);
+
+            }
+            else if (lyt_device.state == "updated") {
 
                 logger.info('[CONFIGURATION] - Updated board configuration started... ');
 
@@ -901,11 +972,12 @@ exports.checkRegistrationStatus = function(args){
                     }
                 )
 
-            } else {
+            }
+            else {
 
-                d.resolve("Board " + boardCode + " in wrong status!");
+                d.resolve("Board '" + boardCode + "' in wrong status!");
 
-                logger.error('[CONFIGURATION] - WRONG BOARD STATUS: status allowed "new" or "registerd"!');
+                logger.error('[CONFIGURATION] - WRONG BOARD STATUS - Status allowed: "new", "registerd", "maintenance"');
                 process.exit();
 
             }
@@ -1516,6 +1588,7 @@ exports.exportManagementCommands = function (session, callback) {
     session.register('s4t.' + boardCode + '.board.execAction', exports.execAction);
     session.register('s4t.' + boardCode + '.board.updateConf', exports.updateConf);
     session.register('s4t.' + boardCode + '.board.updateLR', exports.updateLR);
+    session.register('s4t.' + boardCode + '.board.changeState', exports.changeState);
 
 };
 

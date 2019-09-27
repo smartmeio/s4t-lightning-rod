@@ -4,6 +4,10 @@ import os
 import sys
 
 SETTINGS_PATH = os.environ['IOTRONIC_HOME']+"/settings.json"
+PLUGINS_PATH = os.environ['IOTRONIC_HOME']+"/plugins/plugins.json"
+
+global DEVICE
+DEVICE = "None"
 
 def getLogger(plugin_name, console=None):
 
@@ -34,3 +38,51 @@ def getExtraInfo():
             print("Error parsing settings.json: " + str(err))
 
         return extra
+
+
+def disableAutostart(plugin_name):
+    try:
+        with open(PLUGINS_PATH, "r+") as jsonFile:
+            data = json.load(jsonFile)
+
+            data['plugins'][plugin_name]['autostart']='false'
+
+            jsonFile.seek(0)
+            json.dump(data, jsonFile, indent=4, sort_keys=True)
+            jsonFile.truncate()
+
+            result="disabled"
+            print(result)
+
+    except Exception as err:
+        result="Error updating plugins.json: " + str(err)
+        print(result)
+
+
+def _setDeviceEnv(device):
+    print(device)
+    global DEVICE
+    DEVICE = device
+
+def getDeviceState():
+    return DEVICE["state"] #"maintenance" #DEVICE_STATE
+
+def getDeviceId():
+    return DEVICE["id"] #"maintenance" #DEVICE_STATE
+
+
+def getPosition():
+    try:
+        with open(SETTINGS_PATH) as json_file:
+           settings = json.load(json_file)
+           print(settings['config']['board']['position'])
+           altitude = settings['config']['board']['position']['altitude']
+           longitude = settings['config']['board']['position']['longitude']
+           latitude = settings['config']['board']['position']['latitude']
+           position = {"altitude": altitude, "longitude": longitude, "latitude": latitude}
+
+    except Exception as err:
+        logging.error("Error getting device coordinates!")
+        position = {}
+
+    return position

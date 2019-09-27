@@ -24,6 +24,10 @@ function Device(name) {
     }else{
 
         this.name = name;
+        this.state = "None";
+        this.id = "None";
+        this.label = "None";
+        this.transition_state = "None"
 
     }
 
