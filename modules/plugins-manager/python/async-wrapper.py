@@ -63,7 +63,7 @@ class Plugin(threading.Thread):
 
         try:
 
-            print("Plugin Thread starting...")
+            print("Plugin Thread '"+plugin_name+"' starting...")
             print("--> PARAMS:" + str(self.params))
 
             result = "Plugin " +plugin_name+" is running!"
