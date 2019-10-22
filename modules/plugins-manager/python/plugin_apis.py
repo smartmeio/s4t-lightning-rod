@@ -65,10 +65,18 @@ def _setDeviceEnv(device):
     DEVICE = device
 
 def getDeviceState():
-    return DEVICE["state"] #"maintenance" #DEVICE_STATE
+    try:
+        return DEVICE["state"]
+    except Exception as err:
+        logging.error("Error getting device state!")
+        return "None"
 
 def getDeviceId():
-    return DEVICE["id"] #"maintenance" #DEVICE_STATE
+    try:
+        return DEVICE["id"]
+    except Exception as err:
+        logging.error("Error getting device id!")
+        return "None"
 
 
 def getPosition():

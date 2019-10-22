@@ -26,21 +26,12 @@ var Q = require("q");
 var cp = require('child_process');  	//In order to create a wrapper process for each active plugin.
 var running = require('is-running');  	//In order to verify if a plugin is alive or not.
 var md5 = require('md5');
-
-/*
-try{
-	var PythonShell = require('python-shell');
-}
-catch(err){
-	const {PythonShell} = require("python-shell");
-}
-*/
-const {PythonShell} = require("python-shell");
-
 var net = require('net');
 
-session_plugins = null;
+//const {PythonShell} = require("python-shell");
+var PythonShell = require('python-shell');
 
+session_plugins = null;
 
 var plugins = {};	// This data structure collects all status information of all plugins started in this LR session
 var PLUGINS_SETTING = process.env.IOTRONIC_HOME + '/plugins/plugins.json';
@@ -73,7 +64,6 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 		// Get the plugin's configuration.
 		var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
 
-
 		var status = pluginsConf.plugins[plugin_name].status;
 		var pid = pluginsConf.plugins[plugin_name].pid;
 		var autostart = pluginsConf.plugins[plugin_name].autostart;
@@ -82,35 +72,6 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 
 		// The board restarts all the plugins with status "on" (this status happens after a crash of L-R/board) or with autostart parameter set at true (because some plugins need to start at boot time).
 		if (status == "on" || autostart == "true"){
-
-			/*
-			if(lyt_device.transition_state == "post-maintenance"){
-
-				logger.warn("post-maintenance pluginStarter: " + plugin_name)
-
-				if(pid != '' && pid != null){
-					logger.info("[PLUGIN] |----> PID to kill of plugin '"+plugin_name+"': "+ pid);
-					process.kill(pid);
-				}
-
-				skip = "false";
-
-				plugins[plugin_name]={
-					child: "",
-					pid: pid,
-					alive: false,
-					timer: timer
-				}
-
-
-			}
-			else{
-
-
-
-			}
-			*/
-
 
 			// if the pid of plugin is empty (wrong status)
 			if (pid == '') {
@@ -254,7 +215,6 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 					else
 						logger.warn( '[PLUGIN] - PluginChecker - "'+ plugin_name + '" - No such process with PID "'+plugins[plugin_name].pid+'" found!'+ ' - alive: '+ plugins[plugin_name].alive +' - Checksum accepted ('+checksum+') - Restarting...');
 
-
 					// If the schema json file exists the board will create a child_process to restart the plugin and update the status and the PID value
 					if (fs.existsSync(plugin_json_name) === true){
 
@@ -280,9 +240,7 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 									pluginsConf.plugins[plugin_name].pid = plugins[plugin_name].child.pid;
 									pluginsConf.plugins[plugin_name].status = "on";
 
-
 									plugins[plugin_name].child.send(input_message);
-
 
 									plugins[plugin_name].child.on('message', function(msg) {
 
@@ -300,6 +258,27 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 															logger.debug("[PLUGIN] --> "+ plugin_name + " - JSON file " + PLUGINS_SETTING + " updated!");
 														}
 													});
+
+													if(CHECKSUMS_PLUGINS_LIST.length != 0){
+
+														iotronic_plugin_status = "restarted";
+														session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, plugin_version, iotronic_plugin_status]).then(
+
+															function (rpc_response) {
+
+																if (rpc_response.result == "ERROR") {
+																	logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+																}
+																else {
+																	logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+																	logger.info("[PLUGIN] - Plugin '"+plugin_name + "' environment cleaned and Iotronic status updated to " + iotronic_plugin_status);
+																}
+
+															}
+														);
+
+													}
+
 
 												}
 												catch(err){
@@ -325,30 +304,23 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 
 													clearPluginTimer(plugin_name);
 
-													iotronic_plugin_status = "failed";
-													session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+													if(CHECKSUMS_PLUGINS_LIST.length != 0){
+														iotronic_plugin_status = "failed";
+														session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, plugin_version, iotronic_plugin_status]).then(
 
-														function (rpc_response) {
+															function (rpc_response) {
 
-															if (rpc_response.result == "ERROR") {
-
-																response.result = "ERROR";
-																response.message = 'Error notification plugin status: '+ rpc_response.message;
-																logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-
-															}
-															else {
-
-																logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-
-																response.result = "SUCCESS";
-																response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
-																logger.info("[PLUGIN] - plugin '"+plugin_name + "': "+response.message);
+																if (rpc_response.result == "ERROR") {
+																	logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+																}
+																else {
+																	logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+																	logger.info("[PLUGIN] - Plugin '"+plugin_name + "' environment cleaned and Iotronic status updated to " + iotronic_plugin_status);
+																}
 
 															}
-
-														}
-													);
+														);
+													}
 
 												}
 
@@ -1209,9 +1181,7 @@ exports.call = function (args){
 
 					logger.info("[PLUGIN] --> Plugin " + plugin_name + " being started");
 
-
 					// Check the plugin type: "nodejs" or "python"
-
 					switch (plugin_type) {
 
 						case 'nodejs':
@@ -1300,6 +1270,7 @@ exports.call = function (args){
 
 											logger.warn("[PLUGIN] - '" + plugin_name + "' - plugin process exited: " + msg.name + " - " + msg.logmsg);
 
+											/*
 											iotronic_plugin_status = "exited";
 											session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
 												function (rpc_response) {
@@ -1322,6 +1293,7 @@ exports.call = function (args){
 
 												}
 											);
+											*/
 
 										}
 
@@ -1438,7 +1410,8 @@ exports.call = function (args){
 					}
 
 
-				} else {
+				}
+				else {
 
 					response.result = "ERROR";
 					response.message = "Sync plugin '" + plugin_name + "' already started on board '" + boardCode + "'!";
@@ -1618,6 +1591,7 @@ exports.pluginsBootLoader = function (){
 									var status = enabledPlugins.plugins[plugin_name].status;
 									var autostart = enabledPlugins.plugins[plugin_name].autostart;
 									var plugin_type = enabledPlugins.plugins[plugin_name].type;
+									var category = enabledPlugins.plugins[plugin_name].category;
 
 									if(plugin_type == "nodejs")
 										var ext = '.js';
@@ -1625,7 +1599,7 @@ exports.pluginsBootLoader = function (){
 										var ext ='.py';
 
 
-									logger.info('[PLUGIN] |--> ' + plugin_name + ' - status: ' + status + ' - autostart: ' + autostart);
+									logger.info('[PLUGIN] |--> ' + plugin_name + ' ['+category+'] - status: ' + status + ' - autostart: ' + autostart);
 
 									setTimeout(function () {
 
@@ -1643,6 +1617,9 @@ exports.pluginsBootLoader = function (){
 											var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
 											exports.call([plugin_name, plugin_json_schema, plugin_checksum]);
 
+										}
+										else{
+											logger.warn("[PLUGIN] - Plugin '"+plugin_name+"' without category!")
 										}
 
 									}, 7000 * i);
@@ -1772,122 +1749,96 @@ exports.pluginsLoader = function (){
 											logger.info('[PLUGIN] --> Number of injected plugins: '+ injected_num);
 
 
-											if (lyt_device.state == "maintenance"){
+											// Kill plugins with on_maintenance = "false"
+											var nonManPlg_keys = Object.keys( nonMaintenancePlugins["plugins"] );
+											var nonManPlg_num = nonManPlg_keys.length;
+
+
+											if (nonManPlg_num > 0 && lyt_device.state == "maintenance"){
 												logger.info('[PLUGIN] --> Number of maintenance plugins: '+ maintenance_num);
 
-												// Kill plugins with on_maintenance = "false"
-												var nonManPlg_keys = Object.keys( nonMaintenancePlugins["plugins"] );
-												var nonManPlg_num = nonManPlg_keys.length;
+												logger.info('[PLUGIN] - Killing non-maintenance plugins on the device: ');
+												for (var i = 0; i < nonManPlg_num; i++) {
 
-												if(nonManPlg_num > 0) {
-													logger.info('[PLUGIN] - Killing non-maintenance plugins on the device: ');
-													for (var i = 0; i < nonManPlg_num; i++) {
+													(function (i) {
 
-														(function (i) {
+														var plugin_name = nonManPlg_keys[i];
 
-															var plugin_name = nonManPlg_keys[i];
+														logger.info('[PLUGIN] |--> ' + plugin_name);
 
-															logger.info('[PLUGIN] |--> ' + plugin_name);
+														setTimeout(function () {
 
-															setTimeout(function () {
+															exports.kill([plugin_name]).then(
+																function (response) {
 
-																exports.kill([plugin_name]).then(
-																	function (response) {
+																	if(response != "ERROR"){
+
 																		if (response.result == "SUCCESS")
 																			logger.info("[PLUGIN] --> Non-maintenance plugin '" + plugin_name + "' killed.");
 																		else if(response.code == "NO-RUN")
 																			logger.info("[PLUGIN] --> Non-maintenance plugin '" + plugin_name + "' not running.");
-																		else
-																			logger.warn("[PLUGIN] --> Error killing plugin '" + plugin_name + "'");
-																	}
-																);
 
-															}, 1000 * i);
+																		var iotronic_plugin_status = "killed";
+																		var version = nonMaintenancePlugins["plugins"][plugin_name].version;
 
+																		try{
 
-														})(i);
+																			session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+																				function (rpc_response) {
 
-													}
-												}
+																					if (rpc_response.result == "ERROR") {
 
+																						logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
 
-											}
+																					} else {
 
+																						logger.info("[PLUGIN] - plugin '" + plugin_name + "': Iotronic status updated to '" + iotronic_plugin_status +"'" );
 
-											if(enabled_num > 0) {
+																					}
 
-												logger.info('[PLUGIN] - Starting enabled plugins on the device: ');
+																				}
+																			);
+																		}
+																		catch(err){
 
-												for (var i = 0; i < enabled_num; i++) {
+																			response.result = "ERROR";
 
-													(function (i) {
+																			if(session_plugins == null){
+																				response.message = 'update plugin status error: no Iotronic session established!';
+																				logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+																			}
+																			else{
+																				response.message = 'update plugin status error: ' + err;
+																				logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+																			}
 
-														var plugin_name = enabled_keys[i];
-														var status = enabledPlugins.plugins[plugin_name].status;
-														var autostart = enabledPlugins.plugins[plugin_name].autostart;
-														var plugin_type = enabledPlugins.plugins[plugin_name].type;
-														var plugin_version = enabledPlugins.plugins[plugin_name].version;
-
-														if(plugin_type == "nodejs")
-															var ext = '.js';
-														else if(plugin_type == "python")
-															var ext ='.py';
-
-														var checksum = md5(	fs.readFileSync(PLUGINS_STORE + plugin_name + "/"+plugin_name+ext, 'utf8'));
-														var plugin_checksum = CHECKSUMS_PLUGINS_LIST[plugin_name];
-
-														if(plugin_checksum == checksum){
-
-															logger.info('[PLUGIN] |--> ' + plugin_name + ' - status: ' + status + ' - autostart: ' + autostart);
-
-															setTimeout(function () {
-
-																var category = pluginsConf.plugins[plugin_name].category;
-
-																if (category == "async"){
-																	exports.pluginKeepAlive(plugin_name, plugin_checksum);
-
-																}
-																else if (category == "sync"){
-
-																	var plugin_json_name = PLUGINS_STORE + plugin_name + "/" + plugin_name + '.json';
-																	var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
-																	exports.call([plugin_name, plugin_json_schema, plugin_checksum]);
-
-																}
+																		}
 
 
-															}, 7000 * i);
+																		if(i == nonManPlg_num - 1){
 
-														}
-														else{
+																			exports.startEnabledPlg([enabledPlugins, pluginsConf]);
 
-															logger.warn('[PLUGIN] |--> ' + plugin_name + ' - checksums mismatch: ' + checksum + ' - correct checksum: ' + plugin_checksum);
-
-															session_plugins.call('s4t.iotronic.plugin.invalidPlugin', [boardCode, plugin_name, plugin_version]).then(
-
-																function (rpc_response) {
-
-																	if (rpc_response.result == "ERROR") {
-
-																		logger.error("[PLUGIN] --> Error notification plugin checksum mismatch for '" + plugin_name + "' plugin: " + rpc_response.message);
+																		}
 
 																	}
-																	else {
-
-																		logger.debug("[PLUGIN] - Invalidation plugin response: " + rpc_response.message);
-
-																	}
+																	else
+																		logger.warn("[PLUGIN] --> Error killing plugin '" + plugin_name + "'");
 
 																}
 															);
 
-														}
+														}, 1000 * i);
+
 
 													})(i);
 
 												}
 
+
+											}
+											else{
+												exports.startEnabledPlg([enabledPlugins, pluginsConf]);
 											}
 
 
@@ -1979,6 +1930,161 @@ exports.pluginsLoader = function (){
 
 };
 
+exports.startEnabledPlg = function(args){
+
+	var enabledPlugins = args[0];
+	var pluginsConf = args[1];
+
+	logger.info('[PLUGIN] - Starting enabled plugins on the device: ');
+
+	try{
+
+		var enabled_keys = Object.keys( enabledPlugins["plugins"] );
+		var enabled_num = enabled_keys.length;
+
+		for (var i = 0; i < enabled_num; i++) {
+
+			(function (i) {
+
+				var plugin_name = enabled_keys[i];
+				var status = enabledPlugins.plugins[plugin_name].status;
+				var autostart = enabledPlugins.plugins[plugin_name].autostart;
+				var plugin_type = enabledPlugins.plugins[plugin_name].type;
+				var plugin_version = enabledPlugins.plugins[plugin_name].version;
+				var category = enabledPlugins.plugins[plugin_name].category;
+
+
+				if(plugin_type == "nodejs")
+					var ext = '.js';
+				else if(plugin_type == "python")
+					var ext ='.py';
+
+				var checksum = md5(	fs.readFileSync(PLUGINS_STORE + plugin_name + "/"+plugin_name+ext, 'utf8'));
+				var plugin_checksum = CHECKSUMS_PLUGINS_LIST[plugin_name];
+
+				if(plugin_checksum == checksum){
+
+					logger.info('[PLUGIN] |--> ' + plugin_name + ' ['+category+'] - status: ' + status + ' - autostart: ' + autostart);
+
+					setTimeout(function () {
+
+						var category = pluginsConf.plugins[plugin_name].category;
+
+						if (category == undefined){
+
+							logger.warn("[PLUGIN] - Plugin '"+plugin_name+"' without category!");
+
+							session_plugins.call("s4t.iotronic.plugin.getPLuginsConfs", [boardCode]).then(
+
+								function(plgConf){
+
+									if(plgConf.result == "SUCCESS"){
+
+										remote_plugins_conf = plgConf.message;
+
+										pluginsConf.plugins[plugin_name].category = remote_plugins_conf.plugins[plugin_name].category;
+
+										fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
+
+											if(err) {
+
+												logger.error('[PLUGIN] --> "'+ plugin_name + '" - Error opening '+plugin_name+'.json file: ' + err);
+
+											}
+											else {
+
+												logger.info("[PLUGIN] --> category updated for plugin '"+ plugin_name +"'");
+
+												category = pluginsConf.plugins[plugin_name].category;
+
+												// START PLUGIN
+												if (category == "async"){
+													exports.pluginKeepAlive(plugin_name, plugin_checksum);
+
+												}
+												else if (category == "sync"){
+
+													var plugin_json_name = PLUGINS_STORE + plugin_name + "/" + plugin_name + '.json';
+													var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
+													exports.call([plugin_name, plugin_json_schema, plugin_checksum]);
+
+												}
+
+
+											}
+
+										});
+
+									}
+									else
+										logger.error('[PLUGIN] --> Error getting plugins.json from Iotronic: '+ response.message);
+
+								}
+
+							);
+
+
+						}
+						else{
+
+							if (category == "async"){
+								exports.pluginKeepAlive(plugin_name, plugin_checksum);
+
+							}
+							else if (category == "sync"){
+
+								var plugin_json_name = PLUGINS_STORE + plugin_name + "/" + plugin_name + '.json';
+								var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
+								exports.call([plugin_name, plugin_json_schema, plugin_checksum]);
+
+							}
+						}
+
+
+
+
+
+					}, 7000 * i);
+
+
+				}
+				else{
+
+					logger.warn('[PLUGIN] |--> ' + plugin_name + ' - checksums mismatch: ' + checksum + ' - correct checksum: ' + plugin_checksum);
+
+					session_plugins.call('s4t.iotronic.plugin.invalidPlugin', [boardCode, plugin_name, plugin_version]).then(
+
+						function (rpc_response) {
+
+							if (rpc_response.result == "ERROR") {
+
+								logger.error("[PLUGIN] --> Error notification plugin checksum mismatch for '" + plugin_name + "' plugin: " + rpc_response.message);
+
+							}
+							else {
+
+								logger.debug("[PLUGIN] - Invalidation plugin response: " + rpc_response.message);
+
+							}
+
+						}
+					);
+
+
+				}
+
+			})(i);
+
+		}
+
+	}
+	catch(err){
+		logger.warn('[PLUGIN] - Error parsing plugins.json: '+ err);
+	}
+
+
+};
+
 
 
 // RPC to restart all enabled plugins at LR boot
@@ -2018,6 +2124,8 @@ exports.pluginsReloader = function (){
 					var iotronic_dep = pluginsConf.plugins[plugin_name].iotronic_dep;
 					var on_maintenance = pluginsConf.plugins[plugin_name].on_maintenance;
 
+					var plugin_version = pluginsConf.plugins[plugin_name].version;
+
 					// LR has to restart only the plugins with:
 					// - "autostart" flag is TRUE (boot enabled plugin)
 					// - "status" is not "injected"
@@ -2035,6 +2143,26 @@ exports.pluginsReloader = function (){
 									maintenance_num = maintenance_num + 1;
 								}
 							}
+
+						}
+
+						if (autostart == "true"){
+
+							iotronic_plugin_status = "no-conn-start";
+							session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, plugin_version, iotronic_plugin_status]).then(
+
+								function (rpc_response) {
+
+									if (rpc_response.result == "ERROR") {
+										logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+									}
+									else {
+										logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+										logger.info("[PLUGIN] - Plugin '"+plugin_name + "' status updated in Iotronic to " + iotronic_plugin_status);
+									}
+
+								}
+							);
 
 						}
 						
@@ -2073,8 +2201,56 @@ exports.pluginsReloader = function (){
 
 										exports.kill([plugin_name]).then(
 											function (response) {
-												if (response.result == "SUCCESS" || response.code == "NO-RUN")
+												if (response.result == "SUCCESS" || response.code == "NO-RUN"){
+
 													logger.info("[PLUGIN] - Non-maintenance plugin '" + plugin_name + "' killed.");
+
+													var iotronic_plugin_status = "killed";
+													var version = nonMaintenancePlugins["plugins"][plugin_name].version;
+
+													try{
+
+														session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+															function (rpc_response) {
+
+																if (rpc_response.result == "ERROR") {
+
+																	logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+
+																} else {
+
+																	logger.info("[PLUGIN] - plugin '" + plugin_name + "': Iotronic status updated to '" + iotronic_plugin_status +"'" );
+
+																}
+
+															}
+														);
+													}
+													catch(err){
+
+														response.result = "ERROR";
+
+														if(session_plugins == null){
+															response.message = 'update plugin status error: no Iotronic session established!';
+															logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+														}
+														else{
+															response.message = 'update plugin status error: ' + err;
+															logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+														}
+
+													}
+
+
+													if(i == nonManPlg_num - 1){
+
+														exports.reloadEnabledPlg([enabledPlugins, pluginsConf]);
+
+													}
+
+
+
+												}
 												else
 													logger.warn("[PLUGIN] - Error killing plugin '" + plugin_name + "'");
 											}
@@ -2083,21 +2259,13 @@ exports.pluginsReloader = function (){
 									}, 1000 * i);
 
 
-									if(i == nonManPlg_num - 1){
-										setTimeout(function () {
-											exports.startEnabledPlg([enabledPlugins, pluginsConf]);
-										}, 10000);
-
-									}
-
-
 								})(i);
 
 							}
 
 						}
 						else
-							exports.startEnabledPlg([enabledPlugins, pluginsConf]);
+							exports.reloadEnabledPlg([enabledPlugins, pluginsConf]);
 
 
 					}
@@ -2123,8 +2291,7 @@ exports.pluginsReloader = function (){
 
 };
 
-
-exports.startEnabledPlg = function(args){
+exports.reloadEnabledPlg = function(args){
 
 	var enabledPlugins = args[0];
 	var pluginsConf = args[1];
@@ -2136,9 +2303,6 @@ exports.startEnabledPlg = function(args){
 		var enabled_keys = Object.keys( enabledPlugins["plugins"] );
 		var enabled_num = enabled_keys.length;
 
-		// Get the plugin's configuration.
-		//var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
-
 		for (var i = 0; i < enabled_num; i++) {
 
 			(function (i) {
@@ -2147,13 +2311,14 @@ exports.startEnabledPlg = function(args){
 				var status = enabledPlugins.plugins[plugin_name].status;
 				var autostart = enabledPlugins.plugins[plugin_name].autostart;
 				var plugin_type = enabledPlugins.plugins[plugin_name].type;
+				var category = enabledPlugins.plugins[plugin_name].category;
 
 				if(plugin_type == "nodejs")
 					var ext = '.js';
 				else if(plugin_type == "python")
 					var ext ='.py';
 
-				logger.info('[PLUGIN] |--> ' + plugin_name + ' - status: ' + status + ' - autostart: ' + autostart);
+				logger.info('[PLUGIN] |--> ' + plugin_name + ' ['+category+'] - status: ' + status + ' - autostart: ' + autostart);
 
 				setTimeout(function () {
 
@@ -2161,18 +2326,79 @@ exports.startEnabledPlg = function(args){
 
 					var plugin_checksum = CHECKSUMS_PLUGINS_LIST[plugin_name]; //if LR will start without connection to Iotronic this value will be "undefined"
 
-					if (category == "async"){
+					if (category == undefined){
 
-						exports.pluginKeepAlive(plugin_name, plugin_checksum);
+						logger.warn("[PLUGIN] - Plugin '"+plugin_name+"' without category!");
+
+						session_plugins.call("s4t.iotronic.plugin.getPLuginsConfs", [boardCode]).then(
+
+							function(plgConf){
+
+								if(plgConf.result == "SUCCESS"){
+
+									remote_plugins_conf = plgConf.message;
+
+									pluginsConf.plugins[plugin_name].category = remote_plugins_conf.plugins[plugin_name].category;
+
+									fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
+
+										if(err) {
+
+											logger.error('[PLUGIN] --> "'+ plugin_name + '" - Error opening '+plugin_name+'.json file: ' + err);
+
+										}
+										else {
+
+											logger.info("[PLUGIN] --> category updated for plugin '"+ plugin_name +"'");
+
+											category = pluginsConf.plugins[plugin_name].category;
+
+											// START PLUGIN
+											if (category == "async"){
+
+												exports.pluginKeepAlive(plugin_name, plugin_checksum);
+
+											}
+											else if (category == "sync"){
+
+												var plugin_json_name = PLUGINS_STORE + plugin_name + "/" + plugin_name + '.json';
+												var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
+												exports.call([plugin_name, plugin_json_schema, plugin_checksum]);
+
+											}
+
+
+										}
+
+									});
+
+								}
+								else
+									logger.error('[PLUGIN] --> Error getting plugins.json from Iotronic: '+ response.message);
+
+							}
+
+						);
+
 
 					}
-					else if (category == "sync"){
+					else{
 
-						var plugin_json_name = PLUGINS_STORE + plugin_name + "/" + plugin_name + '.json';
-						var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
-						exports.call([plugin_name, plugin_json_schema, plugin_checksum]);
+						if (category == "async"){
+
+							exports.pluginKeepAlive(plugin_name, plugin_checksum);
+
+						}
+						else if (category == "sync"){
+
+							var plugin_json_name = PLUGINS_STORE + plugin_name + "/" + plugin_name + '.json';
+							var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
+							exports.call([plugin_name, plugin_json_schema, plugin_checksum]);
+
+						}
 
 					}
+
 
 				}, 7000 * i);
 

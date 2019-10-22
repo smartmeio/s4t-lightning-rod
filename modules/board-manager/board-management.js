@@ -885,13 +885,6 @@ exports.checkRegistrationStatus = function(args){
 
             logger.info("[SYSTEM] - Connection to Iotronic " + regStatus.result + ":\n" + JSON.stringify(regStatus.message, null, "\t"));
 
-            // TRANSITION STATE EVALUATION
-            if(lyt_device.state == "post-maintenance"){
-                lyt_device.transition_state = lyt_device.state;
-                lyt_device.state = "registered";
-                logger.info("[SYSTEM] - Transition to state:\n" + JSON.stringify({"transition_state":lyt_device.transition_state, "state": lyt_device.state}, null, "\t"));
-            }
-
             //export RPC
             exports.exportManagementCommands(board_session);
 
@@ -923,7 +916,7 @@ exports.checkRegistrationStatus = function(args){
 
 
             }
-            else if (lyt_device.state == "registered") {
+            else if (lyt_device.state == "operative" || lyt_device.state == "registered") {
 
                 logger.info("[SYSTEM] - Board '"+lyt_device.state+"'  - Start module loading... ");
 
