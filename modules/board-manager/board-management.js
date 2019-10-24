@@ -656,7 +656,7 @@ exports.setBoardPosition = function (args) {
 
         var configFile = JSON.parse(fs.readFileSync(SETTINGS, 'utf8'));
         var board_config = configFile.config["board"];
-        logger.info("[SYSTEM] --> BOARD CONFIGURATION " + JSON.stringify(board_config));
+        //logger.info("[SYSTEM] --> BOARD CONFIGURATION " + JSON.stringify(board_config));
 
         board_config["position"] = board_position;
         logger.info("[SYSTEM] --> BOARD POSITION UPDATED: " + JSON.stringify(board_config["position"]));
@@ -707,7 +707,7 @@ exports.changeState = function (args) {
 
         logger.info("[SYSTEM] - Board state changed to '" + state + "', restarting....");
 
-        response.message = "Device '" + boardCode + "' state changed: LR restarting.";
+        response.message = "Device '" + boardCode + "' state changed to '" + state + "': LR restarting.";
         response.result = "SUCCESS";
         d.resolve(response);
 

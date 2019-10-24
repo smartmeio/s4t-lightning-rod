@@ -1982,7 +1982,7 @@ exports.startEnabledPlg = function(args){
 
 										remote_plugins_conf = plgConf.message;
 
-										pluginsConf.plugins[plugin_name].category = remote_plugins_conf.plugins[plugin_name].category;
+										pluginsConf.plugins[plugin_name] = remote_plugins_conf.plugins[plugin_name];
 
 										fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
 
@@ -2338,7 +2338,7 @@ exports.reloadEnabledPlg = function(args){
 
 									remote_plugins_conf = plgConf.message;
 
-									pluginsConf.plugins[plugin_name].category = remote_plugins_conf.plugins[plugin_name].category;
+									pluginsConf.plugins[plugin_name] = remote_plugins_conf.plugins[plugin_name];
 
 									fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
 
