@@ -232,7 +232,8 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 									var plugin_json_schema = JSON.parse(fs.readFileSync(plugin_json_name));
 									var input_message = {
 										"plugin_name": plugin_name,
-										"plugin_json": plugin_json_schema
+										"plugin_json": plugin_json_schema,
+										"lyt_device": JSON.stringify(lyt_device)
 									};
 
 									logger.info("[PLUGIN] --> "+ plugin_name + " - Input parameters: "+ fs.readFileSync(plugin_json_name));
@@ -1200,10 +1201,12 @@ exports.call = function (args){
 								silent: true,
 							});
 
+
 							//Prepare the message I will send to the process with name of the plugin to start and json file as argument
 							var input_message = {
 								"plugin_name": plugin_name,
-								"plugin_json": JSON.parse(plugin_json)
+								"plugin_json": JSON.parse(plugin_json),
+								"lyt_device": JSON.stringify(lyt_device)
 							};
 
 							child.on('message', function (msg) {
@@ -1320,7 +1323,7 @@ exports.call = function (args){
 
 							});
 
-							//I send the input to the wrapper so that it can launch the proper plugin with the proper json file as argument
+							// CALL: I send the input to the wrapper so that it can launch the proper plugin with the proper json file as argument
 							child.send(input_message);
 
 
@@ -1592,6 +1595,7 @@ exports.pluginsBootLoader = function (){
 									var autostart = enabledPlugins.plugins[plugin_name].autostart;
 									var plugin_type = enabledPlugins.plugins[plugin_name].type;
 									var category = enabledPlugins.plugins[plugin_name].category;
+									var on_maintenance = enabledPlugins.plugins[plugin_name].on_maintenance;
 
 									if(plugin_type == "nodejs")
 										var ext = '.js';
@@ -1599,7 +1603,7 @@ exports.pluginsBootLoader = function (){
 										var ext ='.py';
 
 
-									logger.info('[PLUGIN] |--> ' + plugin_name + ' ['+category+'] - status: ' + status + ' - autostart: ' + autostart);
+									logger.info('[PLUGIN] |--> ' + plugin_name + ' ['+category+'] - status: ' + status + ' - autostart: ' + autostart + ' - on_maintenance: ' + on_maintenance);
 
 									setTimeout(function () {
 
@@ -1952,6 +1956,7 @@ exports.startEnabledPlg = function(args){
 				var plugin_type = enabledPlugins.plugins[plugin_name].type;
 				var plugin_version = enabledPlugins.plugins[plugin_name].version;
 				var category = enabledPlugins.plugins[plugin_name].category;
+				var on_maintenance = enabledPlugins.plugins[plugin_name].on_maintenance;
 
 
 				if(plugin_type == "nodejs")
@@ -1964,7 +1969,7 @@ exports.startEnabledPlg = function(args){
 
 				if(plugin_checksum == checksum){
 
-					logger.info('[PLUGIN] |--> ' + plugin_name + ' ['+category+'] - status: ' + status + ' - autostart: ' + autostart);
+					logger.info('[PLUGIN] |--> ' + plugin_name + ' ['+category+'] - status: ' + status + ' - autostart: ' + autostart + ' - on_maintenance: ' + on_maintenance);
 
 					setTimeout(function () {
 
@@ -2312,13 +2317,14 @@ exports.reloadEnabledPlg = function(args){
 				var autostart = enabledPlugins.plugins[plugin_name].autostart;
 				var plugin_type = enabledPlugins.plugins[plugin_name].type;
 				var category = enabledPlugins.plugins[plugin_name].category;
+				var on_maintenance = enabledPlugins.plugins[plugin_name].on_maintenance;
 
 				if(plugin_type == "nodejs")
 					var ext = '.js';
 				else if(plugin_type == "python")
 					var ext ='.py';
 
-				logger.info('[PLUGIN] |--> ' + plugin_name + ' ['+category+'] - status: ' + status + ' - autostart: ' + autostart);
+				logger.info('[PLUGIN] |--> ' + plugin_name + ' ['+category+'] - status: ' + status + ' - autostart: ' + autostart + ' - on_maintenance: ' + on_maintenance);
 
 				setTimeout(function () {
 
@@ -2530,7 +2536,8 @@ exports.run = function (args){
 							//Prepare the message I will send to the process with name of the plugin to start and json file as argument
 							var input_message = {
 								"plugin_name": plugin_name,
-								"plugin_json": JSON.parse(plugin_json)
+								"plugin_json": JSON.parse(plugin_json),
+								"lyt_device": JSON.stringify(lyt_device)
 							};
 
 							child.on('message', function(msg) {
@@ -2678,7 +2685,7 @@ exports.run = function (args){
 
 							});
 
-							//I send the input to the wrapper so that it can launch the proper plugin with the proper json file as argument
+							// RUN: I send the input to the wrapper so that it can launch the proper plugin with the proper json file as argument
 							child.send(input_message);
 
 							response.result = "SUCCESS";

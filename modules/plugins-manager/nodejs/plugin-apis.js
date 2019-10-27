@@ -47,6 +47,17 @@ catch (err) {
 
 var Q = require("q");
 
+var plugin_device;
+
+exports._setDeviceEnv = function (device){
+    plugin_device = JSON.parse(device);
+};
+
+
+exports.getDeviceState = function (){
+    console.log("AAAAAAAAAAAAAAAAAAA " + plugin_device.state)
+    return plugin_device.state
+};
 
 exports.getLogger = function (plugin_name, loglevel){
 

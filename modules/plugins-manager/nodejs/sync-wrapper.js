@@ -18,6 +18,8 @@
 
 var plugin_name;
 var plugin_json;
+var plugin_device;
+
 
 var fs = require('fs');
 var PLUGINS_SETTING = process.env.IOTRONIC_HOME + '/plugins/plugins.json';
@@ -27,6 +29,7 @@ process.once('message', function(message) {
   
     plugin_name = message.plugin_name;
     plugin_json = message.plugin_json;
+    plugin_device = message.lyt_device;
 
     var plugin_folder = PLUGINS_STORE + plugin_name;
     var fileName = plugin_folder + "/" + plugin_name + '.js';
@@ -37,11 +40,12 @@ process.once('message', function(message) {
 
         var LIGHTNINGROD_HOME = process.env.LIGHTNINGROD_HOME;
         var api = require(LIGHTNINGROD_HOME + '/modules/plugins-manager/nodejs/plugin-apis');
+        api._setDeviceEnv(plugin_device);
       
         process.send({ name: plugin_name, status: true , logmsg: "I'm alive!"});
         process.send({ name: plugin_name, level: "info" , logmsg: "starting..."});
         process.send({ name: plugin_name, status: "alive"});
-      
+
         plugin.main(plugin_name, plugin_json, api, function(err, result){
 	
             process.send({ name: plugin_name, status: "finish", logmsg: result});

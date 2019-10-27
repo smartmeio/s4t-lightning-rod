@@ -19,6 +19,7 @@
 
 var plugin_name;
 var plugin_json;
+var plugin_device;
 
 var fs = require('fs');
 
@@ -29,9 +30,11 @@ process.once('message', function(message) {
   
     plugin_name = message.plugin_name;
     plugin_json = message.plugin_json;
+    plugin_device = message.lyt_device;
 
     var LIGHTNINGROD_HOME = process.env.LIGHTNINGROD_HOME;
     var api = require(LIGHTNINGROD_HOME + '/modules/plugins-manager/nodejs/plugin-apis');
+    api._setDeviceEnv(plugin_device);
 
     var plugin_folder = PLUGINS_STORE + plugin_name;
     var fileName = plugin_folder + "/" + plugin_name + '.js';
