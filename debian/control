@@ -1,0 +1,41 @@
+Source: node-iotronic-lightning-rod
+Section: javascript
+Priority: optional
+Maintainer: Arturo Rinaldi arturo@smartme.io
+Uploaders: Arturo Rinaldi arturo@smartme.io
+Build-Depends:
+ debhelper,
+ devscripts,
+ build-essential,
+ nodejs
+Standards-Version: 4.1.3
+Homepage: https://github.com/MDSLab/s4t-lightning-rod.git
+Vcs-Git: https://github.com/MDSLab/s4t-lightning-rod.git
+Vcs-Browser: https://github.com/MDSLab/s4t-lightning-rod.git
+
+Package: node-iotronic-lightning-rod
+Architecture: any
+Depends: ${misc:Depends},
+ nodejs
+Description: Implementation of the Lightning-rod, the Stack4Things node-side probe
+ (this version works with the standalone version of IoTronic) http://stack4things.unime.it/
+ .
+ Stack4Things is an Internet of Things framework developed by the Mobile and Distributed Systems Lab (MDSLab)
+ at the University of Messina, Italy. Stack4Things is an open source project that helps you in managing
+ IoT device fleets without caring about their physical location, their network configuration, their
+ underlying technology. It is a Cloud-oriented horizontal solution (integrated with OpenStack) providing
+ IoT object virtualization, customization, and orchestration. Stack4Things provides you with an out-of-the-box
+ experience on several of the most popular embedded and mobile systems.
+ .
+ Stack4Things is an Internet of Things framework developed by the Mobile and Distributed Systems Lab (MDSLab) at the University of Messina, Italy. Stack4Things is an open source project that helps you in managing IoT device fleets without caring about their physical location, their network configuration, their underlying technology. It is a Cloud-oriented horizontal solution (integrated with OpenStack) providing IoT object virtualization, customization, and orchestration. Stack4Things provides you with an out-of-the-box experience on several of the most popular embedded and mobile systems.
+ .
+ More details about Stack4Things can be found here.
+ .
+ Lighthing-rod is the board-side component in the Stack4Things architecture. In this repository, you find the version that works with the standalone version of the IoTronic service that you can find here.
+ Lightning-rod (in its standalone version) has been tested to work on:
+ .
+ Raspberry Pi 2 and 3
+ Arduino YUN / Linino ONE
+ Ubuntu 16.04 / 14.04
+ Docker containers
+ LXD containers

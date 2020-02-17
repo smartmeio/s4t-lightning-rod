@@ -1,0 +1,5 @@
+node-iotronic-lightning-rod (2.3.7-1) unstable; urgency=medium
+
+  * Read-only support added for RPC requests.
+
+ -- Nicola Peditto <nicola@smartme.io>  Sun, 07 Jan 2018 19:14:38 +0100
