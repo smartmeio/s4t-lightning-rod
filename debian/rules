@@ -29,6 +29,8 @@ override_dh_installdocs:
 
 override_dh_auto_build:
 	npm install --build-from-source
+	find node_modules/ -maxdepth 2 -name prebuilds -type d -exec rm -rf {} \;
+	[ -d node_modules/autobahn/docker ] && rm -rf node_modules/autobahn/docker
 
 override_dh_install:
 	dh_install -p$(pkg-node) node_modules/ package.json lightning-rod.js lr-server.js $(node-destdir)
@@ -38,7 +40,7 @@ override_dh_link:
 	dh_link -p$(pkg-node) $(node-destdir)/scripts/lr_configure /usr/bin/lr_configure
 
 override_dh_auto_clean:
-	rm -rf node_modules/
+	rm -rf node_modules/ package-lock.json
 
 # Unset executable bit on library files
 override_dh_fixperms:
