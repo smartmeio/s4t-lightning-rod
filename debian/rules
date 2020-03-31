@@ -38,6 +38,8 @@ override_dh_install:
 
 override_dh_link:
 	dh_link -p$(pkg-node) $(node-destdir)/scripts/lr_configure /usr/bin/lr_configure
+	dh_link -p$(pkg-node) $(node-destdir)/utils/install/arancino/configure_LR_arancino.sh /usr/bin/configure_LR_arancino
+	dh_link -p$(pkg-node) $(node-destdir)/utils/install/arancino/board_bkp_rest.sh /usr/bin/usr/bin/board_bkp_rest
 
 override_dh_auto_clean:
 	rm -rf node_modules/ package-lock.json
