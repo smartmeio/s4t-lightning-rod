@@ -1,8 +1,8 @@
 Source: node-iotronic-lightning-rod
 Section: javascript
 Priority: optional
-Maintainer: Arturo Rinaldi arturo@smartme.io
-Uploaders: Arturo Rinaldi arturo@smartme.io
+Maintainer: Arturo Rinaldi <arturo@smartme.io>
+Uploaders: Arturo Rinaldi <arturo@smartme.io>
 Build-Depends:
  debhelper,
  devscripts,
