@@ -1,6 +1,7 @@
 [Unit]
 Description=Stack4Things Lightning-Rod
-After=network.target
+After=network-online.target
+Requires=network-online.target
 
 [Service]
 Type=simple
