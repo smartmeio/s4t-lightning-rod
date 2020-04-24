@@ -25,7 +25,7 @@ then
 
     cp $NODE_PATH/@mdslab/iotronic-lightning-rod/etc/systemd/system/s4t-lightning-rod.service /etc/systemd/system/lightning-rod.service
     sed -i "s|Environment=\"LIGHTNINGROD_HOME=\"|Environment=\"LIGHTNINGROD_HOME=$NODE_PATH/@mdslab/iotronic-lightning-rod\"|g" /etc/systemd/system/lightning-rod.service
-    chmod +x /etc/systemd/system/lightning-rod.service
+    # simply reloading systemd services
     systemctl daemon-reload
 
 else

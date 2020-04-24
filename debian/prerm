@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+/usr/lib/node_modules/@mdslab/iotronic-lightning-rod/scripts/postuninst
+
+npm uninstall -g statvfs
+
+rm -f /usr/bin/lr_configure
+
+exit 0

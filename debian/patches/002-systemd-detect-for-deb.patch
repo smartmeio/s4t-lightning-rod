@@ -1,0 +1,26 @@
+From 9d8a695d29c77f72db30d397e7080ed9c54bc714 Mon Sep 17 00:00:00 2001
+From: Arturo Rinaldi <arty.net2@gmail.com>
+Date: Wed, 8 Apr 2020 12:45:58 +0200
+Subject: [PATCH] adding systemd check based on the existence of the
+ /lib/systemd folder
+
+---
+ scripts/postinst | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/postinst b/scripts/postinst
+index 87b32a7..dfe5afb 100755
+--- a/scripts/postinst
++++ b/scripts/postinst
+@@ -17,7 +17,7 @@ echo "Installing..."
+ DISTRO=`cat /etc/*release | grep DISTRIB_RELEASE | cut -d "=" -f2`
+ echo "--> OS Distribution: " $DISTRO
+ 
+-service=`pidof systemd > /dev/null && echo "systemd" || echo "init.d"`
++service=`[ -d /lib/systemd ] > /dev/null && echo "systemd" || echo "init.d"`
+ echo "--> OS Service Manager: " $service
+ 
+ if [ "$service" = "systemd" ];
+-- 
+2.7.4
+

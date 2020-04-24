@@ -1,0 +1,51 @@
+#!/usr/bin/make -f
+# -*- mode: makefile; coding: utf-8 -*-
+# Copyright 2011-2014, 2018  Jonas Smedegaard <dr@jones.dk>
+# Description: Main Debian packaging script for s4t-lightning-rod
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+%:
+	dh $@
+
+include /usr/share/dpkg/pkg-info.mk
+lib = $(patsubst node-%,%,$(DEB_SOURCE))
+pkg-node = node-$(lib)
+node-destdir = /usr/lib/node_modules/@mdslab/iotronic-lightning-rod
+
+override_dh_installdocs:
+	dh_installdocs --all README.md
+
+override_dh_auto_build:
+	npm install --build-from-source
+	find node_modules/ -maxdepth 2 -name prebuilds -type d -exec rm -rf {} \;
+	[ -d node_modules/autobahn/docker ] && rm -rf node_modules/autobahn/docker
+
+override_dh_install:
+	dh_install -p$(pkg-node) node_modules/ package.json lightning-rod.js lr-server.js $(node-destdir)
+	dh_install -p$(pkg-node) device/ docs/ etc/ scripts/ utils/ modules/ README.md $(node-destdir)
+
+override_dh_link:
+	dh_link -p$(pkg-node) $(node-destdir)/scripts/lr_configure /usr/bin/lr_configure
+	dh_link -p$(pkg-node) $(node-destdir)/utils/install/arancino/configure_LR_arancino.sh /usr/bin/configure_LR_arancino
+	dh_link -p$(pkg-node) $(node-destdir)/utils/install/arancino/configure_LR_artik.sh /usr/bin/configure_LR_artik
+	dh_link -p$(pkg-node) $(node-destdir)/utils/install/arancino/board_bkp_rest.sh /usr/bin/usr/bin/board_bkp_rest
+
+override_dh_auto_clean:
+	rm -rf node_modules/ package-lock.json
+
+# Unset executable bit on library files
+override_dh_fixperms:
+	dh_fixperms
+	chmod +x debian/$(pkg-node)$(node-destdir)/lr-server.js
