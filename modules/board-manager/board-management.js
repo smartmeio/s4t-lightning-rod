@@ -315,6 +315,7 @@ exports.moduleLoaderOnBoot = function() {
 
             conn_alive_timer = 60; //second between check-connection retries
             conn_retry_counter = 0; //counter for check-connection retries
+            wampboot_retry_counter = 0; //counter for check-connection retries
 
             setTimeout(function () {
 
@@ -361,7 +362,37 @@ exports.moduleLoaderOnBoot = function() {
                                     );
 
                                 } catch (err) {
+
+                                    wampboot_retry_counter = wampboot_retry_counter + 1;
+
                                     logger.warn('[BOARD-CONNECTION-RECOVERY] - Error calling "s4t.iotronic.isAlive"');
+
+                                    if (conn_retry_counter >= 5) {
+
+                                        logger.warn("LR restarting in 5 seconds");
+            
+                                        restart_time = 5;
+            
+                                        // activate listener on-exit event after LR exit on-update-conf
+                                        process.on("exit", function () {
+            
+                                            require("child_process").spawn(process.argv.shift(), process.argv, {
+                                                cwd: process.cwd(),
+                                                detached: true,
+                                                stdio: "inherit"
+                                            });
+            
+                                        });
+            
+                                        //Restarting LR
+                                        setTimeout(function () {
+            
+                                            process.exit();
+            
+                                        }, restart_time * 1000);
+            
+            
+                                    }
                                 }
 
 
