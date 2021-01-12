@@ -36,6 +36,9 @@ var session_plugins = null;
 var plugins = {};	// This data structure collects all status information of all plugins started in this LR session
 var PLUGINS_SETTING = process.env.IOTRONIC_HOME + '/plugins/plugins.json';
 var PLUGINS_STORE = process.env.IOTRONIC_HOME + '/plugins/';
+var PLUGINS_INJECTED = process.env.IOTRONIC_HOME + '/plugins/plugins_injected.json';
+
+
 var LIGHTNINGROD_HOME = process.env.LIGHTNINGROD_HOME;
 
 
@@ -68,6 +71,11 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 		var autostart = pluginsConf.plugins[plugin_name].autostart;
 		var plugin_type = pluginsConf.plugins[plugin_name].type;
 		var plugin_version = pluginsConf.plugins[plugin_name].version;
+
+		var response = {
+			message: '',
+			result: ''
+		};
 
 		// The board restarts all the plugins with status "on" (this status happens after a crash of L-R/board) or with autostart parameter set at true (because some plugins need to start at boot time).
 		if (status == "on" || autostart == "true"){
@@ -255,6 +263,51 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 														}
 													});
 
+													// UPDATE PLUGIN STATUS IN IOTRONIC
+													if(CHECKSUMS_PLUGINS_LIST.length != 0){
+														try{
+
+															iotronic_plugin_status = "restarted";
+
+															session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, plugin_version, iotronic_plugin_status]).then(
+																function (rpc_response) {
+
+																	if (rpc_response.result == "ERROR") {
+
+																		response.result = "ERROR";
+																		response.message = 'Error notification plugin status: ' + rpc_response.message;
+																		logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+
+																	} else {
+
+																		logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+
+																		response.result = "SUCCESS";
+																		response.message = "Plugin status updated to '" + iotronic_plugin_status +"'";
+																		logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+
+																	}
+
+																}
+															);
+														}
+														catch(err){
+
+															response.result = "ERROR";
+
+															if(session_plugins == null){
+																response.message = 'update plugin status error: no Iotronic session established!';
+																logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+															}
+															else{
+																response.message = 'update plugin status error: ' + err;
+																logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+															}
+
+														}
+													}
+													
+
 												}
 												catch(err){
 													logger.error('[PLUGIN] --> '+ plugin_name + ' - Error updating JSON file ' + PLUGINS_SETTING + ': ' + err);
@@ -279,30 +332,52 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 
 													clearPluginTimer(plugin_name);
 
-													iotronic_plugin_status = "failed";
-													session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+													// UPDATE PLUGIN STATUS IN IOTRONIC
+													if(CHECKSUMS_PLUGINS_LIST.length != 0){
+														
+														try{
 
-														function (rpc_response) {
+															iotronic_plugin_status = "failed";
 
-															if (rpc_response.result == "ERROR") {
+															session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, plugin_version, iotronic_plugin_status]).then(
+																function (rpc_response) {
 
-																response.result = "ERROR";
-																response.message = 'Error notification plugin status: '+ rpc_response.message;
-																logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+																	if (rpc_response.result == "ERROR") {
 
+																		response.result = "ERROR";
+																		response.message = 'Error notification plugin status: ' + rpc_response.message;
+																		logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+
+																	} else {
+
+																		logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+
+																		response.result = "SUCCESS";
+																		response.message = "Plugin status updated to '" + iotronic_plugin_status +"'";
+																		logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+
+																	}
+
+																}
+															);
+														}
+														catch(err){
+
+															response.result = "ERROR";
+
+															if(session_plugins == null){
+																response.message = 'update plugin status error: no Iotronic session established!';
+																logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
 															}
-															else {
-
-																logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-
-																response.result = "SUCCESS";
-																response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
-																logger.info("[PLUGIN] - plugin '"+plugin_name + "': "+response.message);
-
+															else{
+																response.message = 'update plugin status error: ' + err;
+																logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
 															}
 
 														}
-													);
+													}
+
+
 
 												}
 
@@ -412,9 +487,65 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 	}
 	catch(err){
 		logger.error('[PLUGIN] --> '+ plugin_name + ' - Error loading plugin: ' + err);
+
+		//"sync-wrapper" regex to kill all plugin types
+		cp.exec("pkill -9 -f sync-wrapper", (error, stdout, stderr) => {
+			if (error) { console.log("error:" + error.message);}
+			if (stderr) {console.log("stderr:" + stderr);}
+			console.log("stdout:" + stdout);
+		});
+
+		//clearPluginTimer(plugin_name);
+
+		/*
+		// To get pluginPID
+		cp.exec("pgrep -f "+ plugin_name, (error, stdout, stderr) => {
+			if (error) {
+				console.log("error:" + error.message);
+			}
+			if (stderr) {
+				console.log("stderr:" + stderr);
+			}
+			console.log("stdout:" + stdout);
+
+		});
+		*/
+		
+		
+		logger.warn('[PLUGIN] --> Recovering plugins configuration file:')
+		checkPluginsConf().then(
+			function (check_conf) {
+				logger.warn('[PLUGIN] --> '+ check_conf.result + ': ' + check_conf.message);
+
+
+				/*
+				logger.warn("LR restarting in 5 seconds");
+				restart_time = 3;
+
+				// activate listener on-exit event after LR exit on-update-conf
+				process.on("exit", function () {
+
+					require("child_process").spawn(process.argv.shift(), process.argv, {
+						cwd: process.cwd(),
+						detached: true,
+						stdio: "inherit"
+					});
+
+				});
+
+				//Restarting LR
+				setTimeout(function () {
+					process.exit();
+				}, restart_time * 1000);
+
+				*/
+
+			}
+		);
+	
+
 	}
 
-    
 }
 
 
@@ -490,7 +621,7 @@ function cleanPluginData(plugin_name){
 
 	if(	pluginsConf["plugins"].hasOwnProperty(plugin_name)	){
 
-		var pluginStatus = pluginsConf.plugins[plugin_name]['status'];
+		//var pluginStatus = pluginsConf.plugins[plugin_name]['status'];
 
 		pluginsConf.plugins[plugin_name]=null;
 		delete pluginsConf.plugins[plugin_name];
@@ -504,9 +635,30 @@ function cleanPluginData(plugin_name){
 
 			} else {
 
-				logger.debug("[PLUGIN] ----> plugins.json file updated!");
-				response.result = "SUCCESS";
-				d.resolve(response);
+				logger.info("[PLUGIN] ----> plugins.json file updated!");
+
+				var pluginsInjected = JSON.parse(fs.readFileSync(PLUGINS_INJECTED, 'utf8'));
+				pluginsInjected.plugins[plugin_name]=null;
+				delete pluginsInjected.plugins[plugin_name];
+
+				// Update plugins_injected.json file
+				fs.writeFile(PLUGINS_INJECTED, JSON.stringify(pluginsInjected, null, 4), function (err) {
+					if (err) {
+
+						response.result = "ERROR";
+						response.message = 'Error removing plugin info from plugins_injected.json file: ' + err;
+						logger.error('[PLUGIN] --> ' + response.message);
+						d.resolve(response);
+								
+					}
+					else{
+						logger.info("[PLUGIN] ----> plugins_injected.json file updated!");
+						response.result = "SUCCESS";
+						d.resolve(response);
+					}
+
+				});
+			
 
 			}
 
@@ -700,6 +852,50 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 		});
 
+		// UPDATE PLUGIN STATUS IN IOTRONIC
+		if(CHECKSUMS_PLUGINS_LIST.length != 0){
+			try{
+
+				iotronic_plugin_status = "restarted";
+
+				session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+					function (rpc_response) {
+
+						if (rpc_response.result == "ERROR") {
+
+							response.result = "ERROR";
+							response.message = 'Error notification plugin status: ' + rpc_response.message;
+							logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+
+						} else {
+
+							logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+
+							response.result = "SUCCESS";
+							response.message = "Plugin status updated to '" + iotronic_plugin_status +"'";
+							logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+
+						}
+
+					}
+				);
+			}
+			catch(err){
+
+				response.result = "ERROR";
+
+				if(session_plugins == null){
+					response.message = 'update plugin status error: no Iotronic session established!';
+					logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+				}
+				else{
+					response.message = 'update plugin status error: ' + err;
+					logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+				}
+
+			}
+		}
+
 
 	}
 
@@ -778,30 +974,54 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 							logger.debug("[PLUGIN] --> " + PLUGINS_SETTING + " updated!");
 							clearPluginTimer(plugin_name);
 
-							iotronic_plugin_status = "failed";
-							session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
-								function (rpc_response) {
+							// UPDATE PLUGIN STATUS IN IOTRONIC
+							if(CHECKSUMS_PLUGINS_LIST.length != 0){
 
-									if (rpc_response.result == "ERROR") {
+								iotronic_plugin_status = "failed";
 
-										response.result = "ERROR";
-										response.message = 'Error notification plugin status: ' + rpc_response.message;
-										logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+								try{
+									session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+										function (rpc_response) {
+
+											if (rpc_response.result == "ERROR") {
+
+												response.result = "ERROR";
+												response.message = 'Error notification plugin status: ' + rpc_response.message;
+												logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+												d.resolve(response);
+
+											} else {
+
+												logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+
+												response.result = "SUCCESS";
+												response.message = "Plugin environment cleaned and Iotronic status updated to '" + iotronic_plugin_status +"'";
+												logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+												d.resolve(response);
+
+											}
+
+										}
+									);
+								}
+								catch(err){
+
+									response.result = "ERROR";
+
+									if(session_plugins == null){
+										response.message = 'update plugin status error: no Iotronic session established!';
+										logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
 										d.resolve(response);
-
-									} else {
-
-										logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-
-										response.result = "SUCCESS";
-										response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
-										logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+									}
+									else{
+										response.message = 'update plugin status error: ' + err;
+										logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
 										d.resolve(response);
-
 									}
 
 								}
-							);
+							}
+
 
 
 						}
@@ -1169,28 +1389,49 @@ exports.call = function (args){
 
 											logger.warn("[PLUGIN] - '" + plugin_name + "' - plugin process exited: " + msg.name + " - " + msg.logmsg);
 
-											iotronic_plugin_status = "exited";
-											session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
-												function (rpc_response) {
+											// UPDATE PLUGIN STATUS IN IOTRONIC
+											if(CHECKSUMS_PLUGINS_LIST.length != 0){
+												try{
+													iotronic_plugin_status = "exited";
+													session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+														function (rpc_response) {
 
-													if (rpc_response.result == "ERROR") {
+															if (rpc_response.result == "ERROR") {
 
-														response.result = "ERROR";
-														response.message = 'Error notification plugin status: ' + rpc_response.message;
-														logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+																response.result = "ERROR";
+																response.message = 'Error notification plugin status: ' + rpc_response.message;
+																logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
 
-													} else {
+															} else {
 
-														logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+																logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
 
-														response.result = "SUCCESS";
-														response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
-														logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+																response.result = "SUCCESS";
+																response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
+																logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
 
+															}
+
+														}
+													);
+												}
+												catch(err){
+
+													response.result = "ERROR";
+
+													if(session_plugins == null){
+														response.message = 'update plugin status error: no Iotronic session established!';
+														logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+													}
+													else{
+														response.message = 'update plugin status error: ' + err;
+														logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
 													}
 
+													
 												}
-											);
+									
+											}
 
 										}
 
@@ -1426,7 +1667,7 @@ exports.pluginsBootLoader = function (){
 
 		if(plugin_num > 0) {
 
-			var enabledPlugins = { "plugins":{}};
+			var enabledPlugins = {"plugins":{}};
 
 			for (var i = 0; i < plugin_num; i++) {
 
@@ -1475,12 +1716,11 @@ exports.pluginsBootLoader = function (){
 
 									setTimeout(function () {
 
-										//var plugin_checksum = md5(	fs.readFileSync(PLUGINS_STORE + plugin_name + "/"+plugin_name+ext, 'utf8'));
-										var plugin_checksum = CHECKSUMS_PLUGINS_LIST[plugin_name]; //if LR will start without connection to Iotronic this value will be "undefined"
+										var plugin_checksum = CHECKSUMS_PLUGINS_LIST[plugin_name]; // "undefined" if LR will start without connection to Iotronic
 
 										exports.pluginKeepAlive(plugin_name, plugin_checksum);
 
-									}, 7000 * i);
+									}, 10000 * i);
 
 
 								})(i);
@@ -1888,31 +2128,50 @@ exports.run = function (args){
 
 											clearPluginTimer(plugin_name);
 
-											iotronic_plugin_status = "failed";
-											session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
+											// UPDATE PLUGIN STATUS IN IOTRONIC
+											if(CHECKSUMS_PLUGINS_LIST.length != 0){
+												try{
+													iotronic_plugin_status = "failed";
+													session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
 
-												function (rpc_response) {
+														function (rpc_response) {
 
-													if (rpc_response.result == "ERROR") {
+															if (rpc_response.result == "ERROR") {
 
-														response.result = "ERROR";
-														response.message = 'Error notification plugin status: '+ rpc_response.message;
-														logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+																response.result = "ERROR";
+																response.message = 'Error notification plugin status: '+ rpc_response.message;
+																logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
 
-													}
-													else {
+															}
+															else {
 
-														logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+																logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
 
-														response.result = "SUCCESS";
-														response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
-														logger.info("[PLUGIN] - plugin '"+plugin_name + "': "+response.message);
+																response.result = "SUCCESS";
+																response.message = 'Plugin environment cleaned and Iotronic status updated to ' + iotronic_plugin_status;
+																logger.info("[PLUGIN] - plugin '"+plugin_name + "': "+response.message);
 
-													}
+															}
 
+														}
+													);
 												}
-											);
-
+												catch(err){
+										
+													response.result = "ERROR";
+										
+													if(session_plugins == null){
+														response.message = 'update plugin status error: no Iotronic session established!';
+														logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+													}
+													else{
+														response.message = 'update plugin status error: ' + err;
+														logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+													}
+										
+												}
+										
+											}
 										}
 
 									} else{
@@ -2186,17 +2445,16 @@ exports.injectPlugin = function(args){
 
 							} else {
 
-								//Reading the plugins configuration file
+								// Reading the plugins configuration file
 								var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
 
-								//Update the data structure of the plugin
+								// Update the data structure of the plugin
 								pluginsConf.plugins[plugin_name] = {};
 								pluginsConf.plugins[plugin_name]['status'] = "injected";
-
 								pluginsConf.plugins[plugin_name]['version'] = plugin_bundle.version;
 								pluginsConf.plugins[plugin_name]['type'] = plugin_bundle.type;
 
-								//UPDATE PLUGIN MANAGEMENT
+								// UPDATE PLUGIN MANAGEMENT
 								pluginsConf.plugins[plugin_name]['pid'] = prec_v_pid;
 
 								if (autostart != undefined)
@@ -2204,51 +2462,83 @@ exports.injectPlugin = function(args){
 								else
 									pluginsConf.plugins[plugin_name]['autostart'] = false;
 
+								
+								// Reading the plugins restore info 
+								var pluginsInjected = JSON.parse(fs.readFileSync(PLUGINS_INJECTED, 'utf8'));
+								pluginsInjected.plugins[plugin_name] = {};
+								pluginsInjected.plugins[plugin_name]['status'] = "off";
+								pluginsInjected.plugins[plugin_name]['version'] = plugin_bundle.version;
+								pluginsInjected.plugins[plugin_name]['type'] = plugin_bundle.type;
+								pluginsInjected.plugins[plugin_name]['pid'] = "";
 
-								//Update plugins.json config file
-								fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
+								if (autostart != undefined)
+									pluginsInjected.plugins[plugin_name]['autostart'] = autostart;
+								else
+									pluginsInjected.plugins[plugin_name]['autostart'] = false;
+
+
+								// Update plugins_injected.json restore file
+								fs.writeFile(PLUGINS_INJECTED, JSON.stringify(pluginsInjected, null, 4), function (err) {
 									if (err) {
 
 										response.result = "ERROR";
-										response.message = 'Error writing plugins.json file: ' + err;
+										response.message = 'Error writing plugins_injected.json file: ' + err;
 										logger.error('[PLUGIN] --> ' + response.message);
 										d.resolve(response);
+												
+									}
+									else{
 
-									} else {
+										logger.info("[PLUGIN] --> Restore info in plugins_injected.json updated!");
 
-
-										logger.debug("[PLUGIN] --> Configuration in plugins.json updated!");
-
-										// Write default parameters for the plugin
-
-										var plugin_folder = PLUGINS_STORE + plugin_name;
-										var pluginsParamsFilename = plugin_folder + "/" + plugin_name + '.json';
-
-										//Reading the plugins configuration file
-										var pluginsParams = plugin_bundle.defaults;
-
-										fs.writeFile(pluginsParamsFilename, JSON.stringify(JSON.parse(pluginsParams), null, 4), function (err) {
+										// Update plugins.json config file
+										fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
 											if (err) {
 
 												response.result = "ERROR";
-												response.message = 'Error writing default parameters: ' + err;
+												response.message = 'Error writing plugins.json file: ' + err;
 												logger.error('[PLUGIN] --> ' + response.message);
 												d.resolve(response);
 
 											} else {
-												logger.debug("[PLUGIN] --> Default parameters written!");
 
-												response.result = "SUCCESS";
-												response.message = "Plugin '" + plugin_name + "' injected successfully!";
-												logger.info('[PLUGIN] --> ' + response.message);
-												d.resolve(response);
+
+												logger.info("[PLUGIN] --> Configuration in plugins.json updated!");
+
+												// Write default parameters for the plugin
+
+												var plugin_folder = PLUGINS_STORE + plugin_name;
+												var pluginsParamsFilename = plugin_folder + "/" + plugin_name + '.json';
+
+												//Reading the plugins configuration file
+												var pluginsParams = plugin_bundle.defaults;
+
+												fs.writeFile(pluginsParamsFilename, JSON.stringify(JSON.parse(pluginsParams), null, 4), function (err) {
+													if (err) {
+
+														response.result = "ERROR";
+														response.message = 'Error writing default parameters: ' + err;
+														logger.error('[PLUGIN] --> ' + response.message);
+														d.resolve(response);
+
+													} else {
+														logger.debug("[PLUGIN] --> Default parameters written!");
+
+														response.result = "SUCCESS";
+														response.message = "Plugin '" + plugin_name + "' injected successfully!";
+														logger.info('[PLUGIN] --> ' + response.message);
+														d.resolve(response);
+
+													}
+												});
 
 											}
 										});
 
-									}
-								});
 
+									}
+
+								});
 
 							}
 
@@ -2537,6 +2827,90 @@ exports.getPluginLogs = function(args){
 
 
 
+
+// Function checks if plugins.json file il valid
+function checkPluginsConf(){
+
+	var response = {
+		message: '',
+		result: ''
+	};
+
+	var d = Q.defer();
+
+	// CHECK PLUGINS.JSON FILE
+	try{
+
+		// Reading the plugins configuration file
+		JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
+
+		// If plugins.json is corrupted the code jumps to catch stage,
+		// otherwise the file is valid and LR checks
+		// if plugins_injected.json file exists, otherwise LR creates it from plugins.json
+		if (fs.existsSync(PLUGINS_INJECTED) === false){
+
+			fs.createReadStream(PLUGINS_SETTING).pipe(fs.createWriteStream(PLUGINS_INJECTED));
+			logger.warn('[PLUGIN-RECOVERY] --> plugins_injected.json did not exist: created from plugins.json');
+
+		}
+
+		response.message = "plugins.json file is valid"
+		response.result = "SUCCESS";
+
+		d.resolve(response);
+	
+	}
+	catch(err){
+
+		// plugins.json is corrupted
+
+		logger.error('[PLUGIN-RECOVERY] --> Error plugins.json is corrupted or invalid: ' + err);
+		logger.info("[PLUGIN-RECOVERY] --> plugins.json file restoring.");
+
+		// if plugins_injected.json file does not exist LR will create it starting from the template
+		if (fs.existsSync(PLUGINS_INJECTED) === false){
+			// restore template
+			var pluginsInjected = { "plugins":{}};
+			fs.writeFileSync(PLUGINS_INJECTED, pluginsInjected)
+		}
+		else{
+
+			// otherwise LR will restore plugins.json file from plugins_injected.json
+			var pluginsInjected = JSON.parse(fs.readFileSync(PLUGINS_INJECTED, 'utf8'));
+			
+		}
+
+		// restoring plugins.json
+		fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsInjected, null, 4), function(err) {
+
+			if(err) {
+
+				response.result = "ERROR";
+				response.message = "plugins.json restoring FAILED: "+err;
+				d.resolve(response);
+	
+			} else {
+
+				response.message = "plugins.json file restored"
+				response.result = "SUCCESS";
+				d.resolve(response);
+	
+			}
+	
+		});
+
+
+	}
+
+
+	return d.promise;
+
+}
+
+
+
+
+
 //This function exports all the functions in the module as WAMP remote procedure calls
 exports.Init = function (session){
 
@@ -2564,30 +2938,21 @@ exports.Boot = function (){
 	logger.info('[BOOT] - Plugin Manager booting');
 	logger.debug('[BOOT] --> plugin alive check timer: ' + alive_timer + ' seconds');
 
-	// connectionTester: library used to check the reachability of Iotronic-Server/WAMP-Server
-	var connectionTester = require('connection-tester');
 
-	setTimeout(function(){
+	checkPluginsConf().then(
+		function (check_conf) {
 
-		var output = connectionTester.test(wampIP, port_wamp, 10000);
-		var reachable = output.success;
-		var error_test = output.error;
+			if (check_conf.result == "SUCCESS") {
 
-		if (!reachable) {
+				logger.info("[PLUGIN] --> " + check_conf.message);
+				logger.info("[PLUGIN] --> plugins will be started.");
 
-			//CONNECTION STATUS: FALSE
-			logger.warn("[PLUGIN-CONNECTION-RECOVERY] - INTERNET CONNECTION STATUS: " + reachable + " - ERROR: " + error_test);
+				// connectionTester: library used to check the reachability of Iotronic-Server/WAMP-Server
+				var connectionTester = require('connection-tester');
 
-			exports.pluginsBootLoader();
+				setTimeout(function(){
 
-			logger.warn( '[PLUGIN] - Plugins will start without checksum check!');
-
-			checkIotronicWampConnection = setInterval(function(){
-
-				logger.warn("[PLUGIN-CONNECTION-RECOVERY] - RETRY...");
-
-				connectionTester.test(wampIP, port_wamp, 10000, function (err, output) {
-
+					var output = connectionTester.test(wampIP, port_wamp, 10000);
 					var reachable = output.success;
 					var error_test = output.error;
 
@@ -2596,112 +2961,143 @@ exports.Boot = function (){
 						//CONNECTION STATUS: FALSE
 						logger.warn("[PLUGIN-CONNECTION-RECOVERY] - INTERNET CONNECTION STATUS: " + reachable + " - ERROR: " + error_test);
 
-					}else{
+						exports.pluginsBootLoader();
 
-						try {
+						logger.warn( '[PLUGIN] - Plugins will start without checksum check!');
 
-							// Test if IoTronic is connected to the realm
-							session_plugins.call("s4t.iotronic.isAlive", [boardCode]).then(
+						checkIotronicWampConnection = setInterval(function(){
 
-								function(response){
+							logger.warn("[PLUGIN-CONNECTION-RECOVERY] - RETRY...");
 
-									// Get plugins checksum from Iotronic
-									session_plugins.call('s4t.iotronic.plugin.checksum', [boardCode]).then(
+							connectionTester.test(wampIP, port_wamp, 10000, function (err, output) {
 
-										function (rpc_response) {
+								var reachable = output.success;
+								var error_test = output.error;
 
-											if (rpc_response.result == "ERROR") {
+								if (!reachable) {
 
-												logger.error("[PLUGIN-CONNECTION-RECOVERY] --> Getting plugin checksum list failed: " + rpc_response.message);
+									//CONNECTION STATUS: FALSE
+									logger.warn("[PLUGIN-CONNECTION-RECOVERY] - INTERNET CONNECTION STATUS: " + reachable + " - ERROR: " + error_test);
+
+								}else{
+
+									try {
+
+										// Test if IoTronic is connected to the realm
+										session_plugins.call("s4t.iotronic.isAlive", [boardCode]).then(
+
+											function(response){
+
+												// Get plugins checksum from Iotronic
+												session_plugins.call('s4t.iotronic.plugin.checksum', [boardCode]).then(
+
+													function (rpc_response) {
+
+														if (rpc_response.result == "ERROR") {
+
+															logger.error("[PLUGIN-CONNECTION-RECOVERY] --> Getting plugin checksum list failed: " + rpc_response.message);
+
+														}
+														else {
+
+															CHECKSUMS_PLUGINS_LIST = rpc_response.message;
+															logger.info("[PLUGIN-CONNECTION-RECOVERY] --> Plugins checksums list recovered");
+															logger.debug("[PLUGIN-CONNECTION-RECOVERY] ----> checksums list:\n", CHECKSUMS_PLUGINS_LIST);
+
+															clearInterval( checkIotronicWampConnection );
+
+															logger.info("[PLUGIN-CONNECTION-RECOVERY] - No connection management completed!");
+
+														}
+
+													}
+
+												);
+
+											},
+											function(err){
+
+												logger.warn("NO WAMP CONNECTION YET!")
 
 											}
-											else {
 
-												CHECKSUMS_PLUGINS_LIST = rpc_response.message;
+										);
 
-												logger.debug("[PLUGIN-CONNECTION-RECOVERY] --> Plugins checksums list recovered: ", CHECKSUMS_PLUGINS_LIST);
+									}
+									catch(err){
+										logger.warn('[PLUGIN-CONNECTION-RECOVERY] - Error calling "s4t.iotronic.isAlive"');
+									}
 
-												clearInterval( checkIotronicWampConnection );
-
-											}
-
-										}
-
-									);
-
-								},
-								function(err){
-
-									logger.warn("NO WAMP CONNECTION YET!")
 
 								}
 
-							);
+							});
 
-						}
-						catch(err){
-							logger.warn('[PLUGIN-CONNECTION-RECOVERY] - Error calling "s4t.iotronic.isAlive"');
-						}
+
+						}, alive_timer * 1000);
+
+
+					}
+					else{
+
+
+						checkIotronicWampConnection = setInterval(function(){
+
+							try {
+
+								// Test if IoTronic is connected to the realm
+								session_plugins.call("s4t.iotronic.isAlive", [boardCode]).then(
+
+									function(response){
+
+										exports.pluginsLoader();
+
+										clearInterval( checkIotronicWampConnection );
+
+
+									},
+									function(err){
+
+										logger.warn("[PLUGIN-CONNECTION-RECOVERY] - No WAMP connection yet!")
+
+									}
+
+								);
+
+							}
+							catch(err){
+								logger.warn('[PLUGIN-CONNECTION-RECOVERY] - Internet connection available BUT wamp session not established!');
+								logger.warn("WAMP connection error:" + err);
+								if(PLUGIN_MODULE_LOADED == false){
+
+									exports.pluginsBootLoader();
+
+									logger.warn( '[PLUGIN] - Plugin will start without checksum check!');
+
+								}
+
+							}
+
+
+
+						}, alive_timer * 1000);
 
 
 					}
 
-				});
 
+				}, 5000);
 
-			}, alive_timer * 1000);
+			}
+			else {
 
+				logger.error("[PLUGIN] --> " + check_conf.message);
+				logger.error("[PLUGIN] --> Plugin Manager STOPPED: plugins will not start!");
 
+			}
 		}
-		else{
+	);
 
-
-			checkIotronicWampConnection = setInterval(function(){
-
-				try {
-
-					// Test if IoTronic is connected to the realm
-					session_plugins.call("s4t.iotronic.isAlive", [boardCode]).then(
-
-						function(response){
-
-							exports.pluginsLoader();
-
-							clearInterval( checkIotronicWampConnection );
-
-
-						},
-						function(err){
-
-							logger.warn("[PLUGIN-CONNECTION-RECOVERY] - No WAMP connection yet!")
-
-						}
-
-					);
-
-				}
-				catch(err){
-					logger.warn('[PLUGIN-CONNECTION-RECOVERY] - Internet connection available BUT wamp session not established!');
-					logger.warn("WAMP connection error:" + err);
-					if(PLUGIN_MODULE_LOADED == false){
-
-						exports.pluginsBootLoader();
-
-						logger.warn( '[PLUGIN] - Plugin will start without checksum check!');
-
-					}
-
-				}
-
-
-
-			}, alive_timer * 1000);
-
-
-		}
-
-
-	}, 5000);
 
 
 };
