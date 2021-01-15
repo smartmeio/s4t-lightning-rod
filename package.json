@@ -26,7 +26,8 @@
     "md5":"2.2.1",
     "python-shell":"0.5.0",
     "net":"1.0.2",
-    "lsof":"0.1.0"
+    "lsof":"0.1.0",
+    "cbor":"4.3.0"
   },
   "repository": {
     "type": "git",
