@@ -1,1 +1,47 @@
- 
+v2.3.9
+Plugin Manager:
+- added plugin configuration checks at boot
+- added timer to recovery plugins configuration during plugins execution.
+- fixed some outputs
+
+
+v2.3.8
+Board Manager:
+- refactored connection retries system to Iotronic
+
+
+v2.3.7  
+Board Manager:
+- read-only support added for RPC requests
+- check readonly FS added
+- added new action to manage readonly FS
+
+Plugin Manager:
+- check readonly FS added (inject, start, restart, etc)
+
+
+v2.3.6
+Board Manager:
+- added connection boot checks in Board Manager
+
+
+v2.3.5
+- patch readonly (in logging manager)
+- board_bkp_rest script included in bin
+
+
+v2.3.4
+Plugin Manager:
+- added pluginExec dev tool for plugin development and test pre-production
+- logging management for plugin updated in plugin-api library
+
+
+v2.3.3
+Plugin Manager:
+- some improvements
+
+Service Manager:
+- port generation fixed
+
+Virtual Network Manager:
+- module enabler flag fixed.
