@@ -2874,7 +2874,7 @@ function checkPluginsConf(){
 		if (fs.existsSync(PLUGINS_INJECTED) === false){
 			// restore template
 			var pluginsInjected = { "plugins":{}};
-			fs.writeFileSync(PLUGINS_INJECTED, pluginsInjected)
+			fs.writeFileSync(PLUGINS_INJECTED, JSON.stringify(pluginsInjected, null, 4))
 		}
 		else{
 
@@ -2949,7 +2949,7 @@ function timerCheckPluginsConf(){
 			if (fs.existsSync(PLUGINS_INJECTED) === false){
 				// restore template
 				var pluginsInjected = { "plugins":{}};
-				fs.writeFileSync(PLUGINS_INJECTED, pluginsInjected)
+				fs.writeFileSync(PLUGINS_INJECTED, JSON.stringify(pluginsInjected, null, 4))
 			}
 			else{
 
