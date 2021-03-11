@@ -49,17 +49,6 @@ start () {
 }
 
 stop () {
-        if pkill -9 -f "${WSTUN_REGEX}"; then
-            echo "WSTUN processes have been stopped"
-        else
-            echo "WSTUN processes was already stopped"
-        fi
-
-        if pkill -9 -f "${LIGHTNINGROD_REGEX}"; then
-            echo "Lightning-rod has been stopped"
-        else
-            echo "Lightning-rod was already stopped"
-        fi
 
         if pkill -9 -f "${LR_PY_ASYNC_PLUGINS_REGEX}"; then
             echo " - Python Async plugins killed!"
@@ -77,6 +66,18 @@ stop () {
         if pkill -9 -f "${LR_JS_SYNC_PLUGINS_REGEX}"; then
                 echo "- NodeJS Sync plugins killed!"
 
+        fi
+
+        if pkill -9 -f "${LIGHTNINGROD_REGEX}"; then
+            echo "Lightning-rod has been stopped"
+        else
+            echo "Lightning-rod was already stopped"
+        fi
+        
+        if pkill -9 -f "${WSTUN_REGEX}"; then
+            echo "WSTUN processes have been stopped"
+        else
+            echo "WSTUN processes was already stopped"
         fi
 
 }

@@ -862,10 +862,12 @@ exports.checkRegistrationStatus = function(args){
 
     try {
 
+        /*
         // check NICs
         logger.info("[SYSTEM] - Device network interfaces:");
         var net_nics = getIfaces()
         logger.info("[SYSTEM] --> ifaces:\n" +JSON.stringify(net_nics.message, null, "\t"))
+        */
 
 
 
@@ -1375,52 +1377,29 @@ exports.execAction = function(args){
 
                     logger.info('[SYSTEM] - REST SUBMIT CALLED...');
                     
-                    var params = JSON.parse(params);
-                    logger.info("[SYSTEM] --> REST parameters:\n" + JSON.stringify(params, null, "\t"));
 
-                    var res_url = params["res_url"];
-                    //logger.info(res_url)
-                    //logger.info("[SYSTEM] --> REST called:\n" + res_url);
+                    try {
 
-                    var res_method = params["res_method"];
-                    var res_body = params["res_body"];
-                    var res_headers = params["res_headers"];
-                    var res_cookies = params["res_cookies"];
-                    var res_auth = params["res_auth"];
-                    var res_dataType = params["res_dataType"];
-                    var res_timeout = params["res_timeout"];
+                        var params = JSON.parse(params);
+                        logger.info("[SYSTEM] --> REST parameters:\n" + JSON.stringify(params, null, "\t"));
 
+                        var res_url = params["res_url"];
+                        //logger.info(res_url)
+                        //logger.info("[SYSTEM] --> REST called:\n" + res_url);
 
-                    /*
-                   requestify.get(res_url, { timeout: 60000 }).then(
-                        function(res) {
+                        var res_method = params["res_method"];
+                        var res_body = params["res_body"];
+                        var res_headers = params["res_headers"];
+                        var res_cookies = params["res_cookies"];
+                        var res_auth = params["res_auth"];
+                        var res_dataType = params["res_dataType"];
+                        var res_timeout = params["res_timeout"];
 
-                            //logger.info(res)
+                    } catch (err) {
 
-                            response.message = {};
-                            response.message['body'] = res.getBody();
-                            response.message['code'] = res.getCode();
-                            response.result = "SUCCESS";
-
-                            logger.info('[SYSTEM] --> REST result:' + JSON.stringify(response, null, "\t"));
-                            logger.info('[SYSTEM] --> REST executed.');
-
-                            d.resolve(response);
-
-                        }, 
-                        function(error) {
-
-                            response.message = {};
-                            response.message['body'] = error.getBody();
-                            response.message['code'] = error.getCode();
-                            response.result = "ERROR";
-         
-                            logger.error('[SYSTEM] - Request error "' + action + '" error: ' + JSON.stringify(response.message));
-                            d.resolve(response);
-
-                        }
-                    );
-                    */
+                        throw new Error("Parsing parameters error: " + JSON.stringify(err));
+                        
+                    }
 
 
                     requestify.request(res_url, {
@@ -1469,7 +1448,8 @@ exports.execAction = function(args){
 
                 } catch (err) {
                     response.result = "ERROR";
-                    response.message = JSON.stringify(err);
+                    response.message = err.message;
+                    response.logs = err.stack
                     logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
                     d.resolve(response);
 
@@ -1477,6 +1457,9 @@ exports.execAction = function(args){
 
                 break;   
 
+
+
+        /*
 
             case 'lr_info':
 
@@ -1575,7 +1558,7 @@ exports.execAction = function(args){
                 break;   
         
                           
-                    
+              */      
 
             default:
 
@@ -1601,7 +1584,7 @@ exports.execAction = function(args){
 
 };
 
-
+/*
 var getLRInfo = function (){
 
     var d = Q.defer();
@@ -1733,7 +1716,7 @@ var getSystemInfo = function (info_command){
 
 };
 
-
+*/
 
 var managePackage = function (pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, callback) {
 
