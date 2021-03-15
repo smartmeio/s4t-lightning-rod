@@ -1407,6 +1407,13 @@ var managePackage = function (pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, callback
                 else
                     var install_cmd = "opkg update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
 
+            if (pkg_mng == "apt" || pkg_mng == "apt-get")
+                if (pkg_opts == "")
+                    var install_cmd = pkg_mng + " update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_name;
+                else
+                    var install_cmd = pkg_mng + " update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
+
+
             logger.debug("[SYSTEM] --> cmd: " + install_cmd);
 
 

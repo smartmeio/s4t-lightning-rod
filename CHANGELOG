@@ -1,3 +1,9 @@
+v2.3.10
+Board Manager:
+- fixed LR upgrade procedures for APT packet manager
+- init.d scripts upgraded
+
+
 v2.3.9
 Plugin Manager:
 - added plugin configuration checks at boot
