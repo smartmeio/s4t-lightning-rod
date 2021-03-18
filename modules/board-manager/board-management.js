@@ -1459,107 +1459,6 @@ exports.execAction = function(args){
 
 
 
-        /*
-
-            case 'lr_info':
-
-                try {
-
-                    res = getLRInfo().then(
-
-                        function (rr) {
-                            console.log(rr.getBody())
-
-                            logger.info('[SYSTEM] - REST SUBMIT CALLED...');
-                            response.message = rr.getBody();
-                            response.result = "SUCCESS";
-                            d.resolve(response);
-
-
-                        },
-                        function(err){
-                            response.result = "ERROR";
-                            response.message = JSON.stringify(err);
-                            logger.error('[SYSTEM] - Request error "' + action + '" error: ' + response.message);
-                            d.resolve(response);
-                        }
-
-                    );
-                    
-
-                } catch (err) {
-                    response.result = "ERROR";
-                    response.message = JSON.stringify(err);
-                    logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
-                    d.resolve(response);
-
-                }
-
-                break;   
-
-
-            case 'iface_info':
-
-                    try {
-
-                        var net_nics = getIfaces()
-                        logger.info("[SYSTEM] --> network interfaces addresses successfully returned");
-
-                        d.resolve(net_nics);
-    
-                    } catch (err) {
-                        response.result = "ERROR";
-                        response.message = JSON.stringify(err);
-                        logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
-                        d.resolve(response);
-    
-                    }
-    
-                    break;
-
-
-            case 'system_info':
-
-                try {
-
-                    var params = JSON.parse(params);
-                    var osystem = params["osystem"];
-
-                    logger.debug(osystem)
-
-                    if (osystem == "ARTIK") {
-                        info_command="cat /etc/image-info/build-release ; uname -a"
-                    }
-                    else{
-                        info_command="cat /etc/*release ; uname -a"
-                    }
-
-                    getSystemInfo(info_command).then(
-
-                        function (res) {
-
-                            logger.info('[SYSTEM] - System Info result successfully returned')
-
-                            d.resolve(res);
-
-                        }
-
-                    );
-                    
-
-                } catch (err) {
-                    response.result = "ERROR";
-                    response.message = JSON.stringify(err);
-                    logger.error('[SYSTEM] - execAction "' + action + '" error: ' + JSON.stringify(err));
-                    d.resolve(response);
-
-                }
-
-                break;   
-        
-                          
-              */      
-
             default:
 
                 response.message = "Board operation '" + action + "' not supported!";
@@ -1584,139 +1483,8 @@ exports.execAction = function(args){
 
 };
 
-/*
-var getLRInfo = function (){
-
-    var d = Q.defer();
-
-    var response = {
-        message: '',
-        result: ''
-    };
-
-    requestify.get('http://localhost:8888/diagnostics').then(
-        function(response) {
-
-            var res = response.getBody();
-            response.message = res;
-            response.result = "SUCCESS";
-            d.resolve(response);
-
-        },function (error) {
-
-            response.message = error;
-            response.result = "ERROR";
-            d.resolve(response);
-
-        }
-    );
 
 
-    return d.promise;
-
-};
-
-var getIfaces = function (){
-
-    var response = {
-        message: '',
-        result: ''
-    };
-
-    try{
-
-        var nets = os.networkInterfaces()
-    
-        var net_nics = {}   
-    
-        for (var name of Object.keys(nets)) {
-            for (var net of nets[name]) {
-                // Skip non-IPv4 and internal (i.e. 127.0.0.1) addresses
-                if (net.family === 'IPv4' && !net.internal) {
-                    if (!net_nics[name]) {
-                        net_nics[name] = {};
-                    }
-                    net_nics[name]['ip'] = net.address;
-                    net_nics[name]['mac'] = net.mac;
-                }
-            }
-        }
-
-        response.message = net_nics;
-        response.result = "SUCCESS";
-
-        return response;
-
-    }
-    catch(err){
-        response.message = JSON.stringify(err);
-        response.result = "ERROR";
-        logger.error('[SYSTEM] - getIfaces error: '+ response.message);
-        return response;
-    }
-
-
-};
-
-var getSystemInfo = function (info_command){
-
-    var d = Q.defer();
-
-    var response = {
-        message: '',
-        result: ''
-    };
-
-    try{
-
-
-        exec(info_command, function (error, stdout, stderr) {
-
-            try {
-
-                if (error) {
-                    //logger.error('[SYSTEM] - SystemInfo result: ' + error);
-                    response.message = error;
-                    response.logs = error.message;
-                    response.result = "ERROR";
-                    d.resolve(response);
-                } else if (stderr) {
-                    //logger.info('[SYSTEM] - SystemInfo result: ' + stderr);
-                    response.message = stderr;
-                    response.result = "WARNING";
-                    d.resolve(response);
-                } else {
-                    //logger.info('[SYSTEM] - SystemInfo result: ' + stdout);
-                    response.message = stdout;
-                    response.result = "SUCCESS";
-                    d.resolve(response);
-                }
-            }
-            catch(err){
-                response.result = "ERROR";
-                response.message = JSON.stringify(err);
-                logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
-                d.resolve(response);
-            }
-
-        });
-
-
-
-    }
-    catch(err){
-        response.message = JSON.stringify(err);
-        response.result = "ERROR";
-        logger.error('[SYSTEM] - getSystemInfo error: '+ response.message);
-        d.resolve(response);
-    }
-
-    return d.promise;
-
-
-};
-
-*/
 
 var managePackage = function (pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, callback) {
 
@@ -1740,6 +1508,13 @@ var managePackage = function (pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, callback
                     var install_cmd = "opkg update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_name;
                 else
                     var install_cmd = "opkg update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
+
+            if (pkg_mng == "apt" || pkg_mng == "apt-get")
+                if (pkg_opts == "")
+                    var install_cmd = pkg_mng + " update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_name;
+                else
+                    var install_cmd = pkg_mng + " update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
+
 
             logger.debug("[SYSTEM] --> cmd: " + install_cmd);
 

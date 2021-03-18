@@ -1,3 +1,10 @@
+v2.4.0
+Board Manager:
+- added action "rest_submit" to sumbit generic REST request locally into device
+- fixed LR upgrade procedures for APT packet manager
+- init.d scripts upgraded
+
+
 v2.3.9
 Plugin Manager:
 - added plugin configuration checks at boot
