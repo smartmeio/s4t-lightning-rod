@@ -1434,7 +1434,8 @@ exports.execAction = function(args){
                             response.message['code'] = error.getCode();
                             response.result = "ERROR";
          
-                            logger.error('[SYSTEM] - Request error "' + action + '" error: ' + JSON.stringify(response.message));
+                            //logger.debug('[SYSTEM] --> REST error "' + action + '" error: ' + JSON.stringify(response.message));
+                            logger.error('[SYSTEM] --> REST error "' + action + '" error: ' + JSON.stringify(response.message['code']));
                             d.resolve(response);
 
                         }
