@@ -2,7 +2,11 @@ v2.4.0
 Board Manager:
 - added action "rest_submit" to sumbit generic REST request locally into device
 - fixed LR upgrade procedures for APT packet manager
+
+General:
 - init.d scripts upgraded
+- fixed logrotation
+- removed statvfs package from installation procedures
 
 
 v2.3.9

@@ -48,9 +48,9 @@ fi
 
 
 
-# External packages instalaltion
-/usr/bin/npm install -g --unsafe https://github.com/PlayNetwork/node-statvfs/tarball/v3.0.0
-echo "--> 3rd-party dependencies installed."
+# External packages installation
+#/usr/bin/npm install -g --unsafe https://github.com/PlayNetwork/node-statvfs/tarball/v3.0.0
+#echo "--> 3rd-party dependencies installed."
 
 IOTRONIC_HOME="/var/lib/iotronic"
 

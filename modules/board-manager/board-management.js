@@ -1375,17 +1375,17 @@ exports.execAction = function(args){
 
                 try {
 
-                    logger.info('[SYSTEM] - REST SUBMIT CALLED...');
+                    logger.info('[SYSTEM] - REST SUBMITTER CALLED');
                     
 
                     try {
 
                         var params = JSON.parse(params);
-                        logger.info("[SYSTEM] --> REST parameters:\n" + JSON.stringify(params, null, "\t"));
+                        //logger.info("[SYSTEM] --> REST parameters:\n" + JSON.stringify(params, null, "\t"));
 
                         var res_url = params["res_url"];
                         //logger.info(res_url)
-                        //logger.info("[SYSTEM] --> REST called:\n" + res_url);
+                        logger.info("[SYSTEM] --> REST called: " + JSON.stringify(res_url));
 
                         var res_method = params["res_method"];
                         var res_body = params["res_body"];
@@ -1421,8 +1421,8 @@ exports.execAction = function(args){
                             response.message['code'] = res.getCode();
                             response.result = "SUCCESS";
 
-                            logger.info('[SYSTEM] --> REST result:' + JSON.stringify(response, null, "\t"));
-                            logger.info('[SYSTEM] --> REST executed.');
+                            //logger.info('[SYSTEM] --> REST result:' + JSON.stringify(response, null, "\t"));
+                            //logger.info('[SYSTEM] --> REST executed.');
 
                             d.resolve(response);
 
