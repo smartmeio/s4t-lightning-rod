@@ -22,7 +22,7 @@ logger.setLevel(loglevel);
 
 var http = require('http');
 
-var checkHealthResponse = null;
+//var checkHealthResponse = null;
 
 health_rest_port = nconf.get('config:board:health:local_port');
 
@@ -142,7 +142,7 @@ exports.sendRPCalive = function (callback) {
 
     try{
 
-        checkHealthResponse = setTimeout(function(){
+        var checkHealthResponse = setTimeout(function(){
 
             var msg = {
                 "status": "false",
