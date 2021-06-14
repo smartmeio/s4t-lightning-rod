@@ -23,6 +23,9 @@ var logger = log4js.getLogger('board-management');
 var fs = require("fs");
 var crypto = require('crypto');
 var Q = require("q");
+var requestify = require('requestify');
+var os = require('os');
+
 
 var exec = require('child_process').exec;
 var spawn = require('child_process').spawn;
@@ -859,6 +862,15 @@ exports.checkRegistrationStatus = function(args){
 
     try {
 
+        /*
+        // check NICs
+        logger.info("[SYSTEM] - Device network interfaces:");
+        var net_nics = getIfaces()
+        logger.info("[SYSTEM] --> ifaces:\n" +JSON.stringify(net_nics.message, null, "\t"))
+        */
+
+
+
         var regStatus = args[0];
 
         if (regStatus.result == "SUCCESS") {
@@ -1359,6 +1371,95 @@ exports.execAction = function(args){
                 break;
 
 
+            case 'rest_submit':
+
+                try {
+
+                    logger.info('[SYSTEM] - REST SUBMITTER CALLED');
+                    
+
+                    try {
+
+                        var params = JSON.parse(params);
+                        //logger.info("[SYSTEM] --> REST parameters:\n" + JSON.stringify(params, null, "\t"));
+
+                        var res_url = params["res_url"];
+                        //logger.info(res_url)
+                        logger.info("[SYSTEM] --> REST called: " + JSON.stringify(res_url));
+
+                        var res_method = params["res_method"];
+                        var res_body = params["res_body"];
+                        var res_headers = params["res_headers"];
+                        var res_cookies = params["res_cookies"];
+                        var res_auth = params["res_auth"];
+                        var res_dataType = params["res_dataType"];
+                        var res_timeout = params["res_timeout"];
+
+                    } catch (err) {
+
+                        throw new Error("Parsing parameters error: " + JSON.stringify(err));
+                        
+                    }
+
+
+                    requestify.request(res_url, {
+                        method: res_method,
+                        body: res_body,
+                        headers: res_headers,
+                        cookies: res_cookies,
+                        auth: res_auth,
+                        dataType: res_dataType,
+                        timeout: res_timeout	
+                    }).then(
+
+
+                        function(res) {
+
+                            //logger.info(res)
+                            response.message = {};
+                            response.message['body'] = res.getBody();
+                            response.message['code'] = res.getCode();
+                            response.result = "SUCCESS";
+
+                            //logger.info('[SYSTEM] --> REST result:' + JSON.stringify(response, null, "\t"));
+                            //logger.info('[SYSTEM] --> REST executed.');
+
+                            d.resolve(response);
+
+                        }, 
+                        function(error) {
+
+                            response.message = {};
+                            response.message['body'] = error.getBody();
+                            response.message['code'] = error.getCode();
+                            response.result = "ERROR";
+         
+                            //logger.debug('[SYSTEM] --> REST error "' + action + '" error: ' + JSON.stringify(response.message));
+                            logger.error('[SYSTEM] --> REST error "' + action + '" error: ' + JSON.stringify(response.message['code']));
+                            d.resolve(response);
+
+                        }
+                        
+                       
+                    
+                    );
+                    
+
+                    
+
+                } catch (err) {
+                    response.result = "ERROR";
+                    response.message = err.message;
+                    response.logs = err.stack
+                    logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                    d.resolve(response);
+
+                }
+
+                break;   
+
+
+
             default:
 
                 response.message = "Board operation '" + action + "' not supported!";
@@ -1384,6 +1485,8 @@ exports.execAction = function(args){
 };
 
 
+
+
 var managePackage = function (pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, callback) {
 
     var response = {
@@ -1406,6 +1509,13 @@ var managePackage = function (pkg_mng, pkg_mng_cmd, pkg_opts, pkg_name, callback
                     var install_cmd = "opkg update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_name;
                 else
                     var install_cmd = "opkg update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
+
+            if (pkg_mng == "apt" || pkg_mng == "apt-get")
+                if (pkg_opts == "")
+                    var install_cmd = pkg_mng + " update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_name;
+                else
+                    var install_cmd = pkg_mng + " update && " + pkg_mng + " " + pkg_mng_cmd + " " + pkg_opts + " " + pkg_name;
+
 
             logger.debug("[SYSTEM] --> cmd: " + install_cmd);
 
