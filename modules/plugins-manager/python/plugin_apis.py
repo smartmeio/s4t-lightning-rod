@@ -8,8 +8,9 @@ SETTINGS_PATH = os.environ['IOTRONIC_HOME']+"/settings.json"
 def getLogger(plugin_name, console=None):
 
     # logging.root.handlers = []
-    lr_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    logging.basicConfig(filename='/var/log/iotronic/plugins/'+plugin_name+'.log', level=logging.DEBUG)
+    #lr_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+    logging.basicConfig(format=FORMAT, filename='/var/log/iotronic/plugins/'+plugin_name+'.log', level=logging.DEBUG)
 
     # set up logging to console
     if (console != None) and (console == True):
