@@ -1,0 +1,259 @@
+#!/usr/bin/env node
+
+var ps = require('ps-node');
+var fs = require("fs");
+var Q = require("q");
+
+
+var PLUGINS_SETTING = process.env.IOTRONIC_HOME + '/plugins/plugins.json';
+
+var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
+
+// Get the plugin json object list
+var plugins_keys = Object.keys( pluginsConf["plugins"] );
+
+// Get the number of plugins in the list "plugins_keys" in order to use it in the next loop
+var plugin_num = plugins_keys.length;
+
+
+
+
+PLUGINS_REPORT={}
+
+MODE=process.argv[2]
+
+
+function checkPluginAlive(plugin_name){
+
+    var response = {
+            message: '',
+            result: ''
+    };
+
+    var d = Q.defer();
+
+
+    ps.lookup(
+        {
+            //command: 'python3',
+            //arguments: 'py_async'
+            arguments: "/plugins-manager.*" + plugin_name
+            //arguments: plugin_name
+            
+        }, 
+        function(err, resultList ) {
+            if (err) {
+                //console.log(err)
+                response.result="ERROR"
+                response.message=err
+                response.alive=undefined
+                d.resolve(response);
+                //throw new Error( err );
+            }
+            else{
+
+                if(resultList.length > 0){
+
+                    if(resultList.length > 1){
+
+                        resultList.forEach(function( process ){
+                            if( process ){
+                                //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
+                                response.result="ERROR"
+                                response.message=resultList//"Multiple instances of this plugin are running!"
+                                response.alive="MULTIPLE"
+                                d.resolve(response);
+                            }
+                            
+                        });
+
+                    }
+                    else{
+                        let process=resultList[0]
+                        //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
+                        response.result="SUCCESS"
+                        response.message=process //"PROCESS_RUNNING"
+                        response.alive=true
+                        d.resolve(response);
+                    }
+                                
+                    
+                }
+                else{    
+                    response.result="SUCCESS"
+                    response.message= "NO_PROCESS" //'[PLUGIN] - Plugin '+ plugin_name + ' is not running!'
+                    response.alive=false
+                    d.resolve(response);
+    
+                }
+
+            }
+
+
+        }
+    );
+
+    return d.promise;
+
+}
+
+
+
+function startChecks(){
+
+
+    var d = Q.defer();
+
+    ps.lookup(
+        {
+            //command: 'node',
+            arguments: 'lightning-rod.js'
+            
+        }, 
+        function(err, resultList ) {
+
+            if (err) {
+                if(MODE != "no_cli")
+                    console.log(err)
+                throw new Error( err );
+            }
+
+            var LRprocess=resultList
+
+            if(LRprocess.length > 0){
+                if(MODE != "no_cli")
+                    console.log('LR PID: %s', LRprocess[0].pid );
+            }
+            else{
+                if(MODE != "no_cli")
+                    console.log("LR PID: LR not running!")
+            }
+
+
+            if(MODE != "no_cli"){
+
+                console.log('[PLUGIN] - Number of installed plugins: '+ plugin_num);
+                console.log("[PLUGIN] - Plugins installed:")
+
+            }
+        
+
+            for (var i = 0; i < plugin_num; i++) {
+
+                (function (i) {
+
+                    var plugin_name = plugins_keys[i];
+                    var status = pluginsConf.plugins[plugin_name].status;
+                    var autostart = pluginsConf.plugins[plugin_name].autostart;
+                    var version = pluginsConf.plugins[plugin_name].version;
+
+                    checkPluginAlive(plugin_name).then(
+
+                        function (checkAlive) {
+
+                            if(MODE == "no_cli"){
+                                PLUGINS_REPORT[plugin_name]={}
+                                PLUGINS_REPORT[plugin_name]["alive"]=checkAlive.alive
+                                PLUGINS_REPORT[plugin_name]["pid"]=checkAlive.message['pid']
+                                PLUGINS_REPORT[plugin_name]["version"]=version
+                                PLUGINS_REPORT[plugin_name]["status"]=status
+
+                            }
+
+                            
+
+                            if(MODE != "no_cli") console.log('[PLUGIN] |--> ' + plugin_name + ' [status: ' + status + ' - autostart: ' + autostart+']');
+                            
+                            if (checkAlive.result == "ERROR") {
+
+                                if(checkAlive.alive == "multiple"){
+
+                                    if(MODE != "no_cli"){
+                                        console.error("[PLUGIN] - There are multiple running instances of "+plugin_name+" plugin!")
+                                        console.error(checkAlive.message)
+                                    }
+                                    
+                                    let resultList = checkAlive.message;
+                                    resultList.forEach(function( process ){
+                                        if( process ){
+                                            //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
+                                            if(MODE != "no_cli") console.log('- PID: %s', process.pid)
+                                        }
+                                        
+                                    });
+
+                                }
+                                else{
+                                    if(MODE != "no_cli") console.error(checkAlive.message)
+                                }
+                                
+                            }
+                            else {
+
+                                let process=checkAlive.message
+                                
+                                if(checkAlive.alive){
+
+                                    //console.log('[PLUGIN] - Plugin '+ plugin_name + ' is running!')
+                                    if(MODE != "no_cli") console.log('[PLUGIN] - Plugin '+ plugin_name + ' is running!  [ PID: '+process.pid+', LR_PID: '+process.ppid+', PLUGIN: '+JSON.stringify(process.arguments).split('plugins-manager')[1]+' ]')
+                                    
+                                }
+                                else{
+
+                                    if(MODE != "no_cli") console.log('[PLUGIN] - Plugin '+ plugin_name + ' is not running!')
+
+                                }
+
+                                
+
+                            }
+
+                            
+                            
+
+                            if(MODE == "no_cli" && i==plugin_num-1){
+
+                                d.resolve(PLUGINS_REPORT); 
+
+                            }
+                                
+
+                        }
+
+
+                    );
+                    
+
+                })(i);
+
+            }
+
+
+            
+
+        
+
+        
+            
+
+        }
+    );
+
+
+    return d.promise;
+
+}
+
+
+
+
+startChecks().then(
+
+    function(plugins_status){
+
+        if(MODE == "no_cli")
+            console.log(plugins_status)
+
+    }
+
+)

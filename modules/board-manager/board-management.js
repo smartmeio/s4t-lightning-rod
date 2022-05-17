@@ -1460,6 +1460,50 @@ exports.execAction = function(args){
 
 
 
+            case 'plugins_check':
+
+                exec('pluginsCheck no_cli', function (error, stdout, stderr) {
+
+                    try {
+
+                        if (error) {
+                            logger.error('[SYSTEM] - Plugins status result (error): ' + error);
+                            response.message = error;
+                            response.logs = error.message;
+                            response.result = "ERROR";
+                            d.resolve(response);
+
+                        } else if (stderr) {
+                            if (stderr == "")
+                                stderr = "Getting plugins status...";
+
+                            logger.info('[SYSTEM] - Plugins status result (stderr): ' + stderr);
+                            response.message = stderr;
+                            response.result = "WARNING";
+                            d.resolve(response);
+
+                        } else {
+                            //stdout = stdout.replace('\n', '');
+                            logger.info('[SYSTEM] - Plugins status result (stdout): ' + stdout);
+                            response.logs = stdout.replace(/\n/g,''); //JSON.parse(JSON.stringify(stdout)).replace(/\n/g,'');
+                            response.message = "Plugins status result";
+                            response.result = "SUCCESS";
+                            d.resolve(response);
+                        }
+
+                    }
+                    catch(err){
+                        response.result = "ERROR";
+                        response.message = JSON.stringify(err);
+                        logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                        d.resolve(response);
+                    }
+
+                });
+                break;
+
+
+
             default:
 
                 response.message = "Board operation '" + action + "' not supported!";
