@@ -157,6 +157,7 @@ function startChecks(){
                                 PLUGINS_REPORT[plugin_name]["pid"]=checkAlive.message['pid']
                                 PLUGINS_REPORT[plugin_name]["version"]=version
                                 PLUGINS_REPORT[plugin_name]["status"]=status
+                                PLUGINS_REPORT[plugin_name]["autostart"]=autostart
 
                             }
 

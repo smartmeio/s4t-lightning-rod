@@ -24,11 +24,12 @@ var fs = require("fs");
 var crypto = require('crypto');
 var Q = require("q");
 var requestify = require('requestify');
-var os = require('os');
+//var os = require('os');
+var ps = require('ps-node');
 
 
 var exec = require('child_process').exec;
-var spawn = require('child_process').spawn;
+//var spawn = require('child_process').spawn;
 
 var board_session = null;
 var LIGHTNINGROD_HOME = process.env.LIGHTNINGROD_HOME;
@@ -1467,6 +1468,7 @@ exports.execAction = function(args){
                     try {
 
                         if (error) {
+
                             logger.error('[SYSTEM] - Plugins status result (error): ' + error);
                             response.message = error;
                             response.logs = error.message;
@@ -1474,6 +1476,7 @@ exports.execAction = function(args){
                             d.resolve(response);
 
                         } else if (stderr) {
+
                             if (stderr == "")
                                 stderr = "Getting plugins status...";
 
@@ -1502,6 +1505,74 @@ exports.execAction = function(args){
                 });
                 break;
 
+
+
+
+            case 'process_check':
+
+                try {
+
+                    logger.info('[SYSTEM] - PROCESS CHECKER CALLED');
+
+                    var params = JSON.parse(params);
+                    logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params, null, "\t"));
+
+                    var process_phrase = params["process"];
+                    logger.info("[SYSTEM] --> process filter: " + JSON.stringify(process_phrase));
+
+                    ps.lookup(
+                        {
+                            //command: 'python3',
+                            arguments: process_phrase
+                        }, 
+                        function(err, resultList ) {
+                            if (err) {
+                                response.result="ERROR"
+                                response.message=err
+                                d.resolve(response);
+                            }
+                            else{
+                
+                                if(resultList.length > 0){
+                
+                                    resultList.forEach(function( process ){
+                                        if( process ){
+                                            //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
+                                            response.result="SUCCESS"
+                                            response.message=resultList
+                                            d.resolve(response);
+                                        }
+                                        
+                                    });
+                                    
+                                }
+                                else{    
+
+                                    response.result="SUCCESS"
+                                    response.message= "NO_PROCESS"
+                                    d.resolve(response);
+                    
+                                }
+                
+                            }
+                
+                
+                        }
+                    );  
+
+                } catch (err) {
+
+                    response.result = "ERROR";
+                    response.message = err.message;
+                    response.logs = err.stack
+                    logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                    d.resolve(response);
+
+                }         
+            
+                break;
+    
+    
 
 
             default:
