@@ -1460,7 +1460,6 @@ exports.execAction = function(args){
                 break;   
 
 
-
             case 'plugins_check':
 
                 exec('pluginsCheck no_cli', function (error, stdout, stderr) {
@@ -1469,28 +1468,34 @@ exports.execAction = function(args){
 
                         if (error) {
 
-                            logger.error('[SYSTEM] - Plugins status result (error): ' + error);
+                            //logger.error('[SYSTEM] - Plugins status result (error): ' + error);
                             response.message = error;
                             response.logs = error.message;
                             response.result = "ERROR";
+
+                            logger.info('[SYSTEM] - Plugins status result (error): ' + response.result);
                             d.resolve(response);
 
                         } else if (stderr) {
 
-                            if (stderr == "")
-                                stderr = "Getting plugins status...";
+                            if (stderr == "") stderr = "Getting plugins status...";
 
-                            logger.info('[SYSTEM] - Plugins status result (stderr): ' + stderr);
+                            //logger.info('[SYSTEM] - Plugins status result (stderr): ' + stderr);
                             response.message = stderr;
                             response.result = "WARNING";
+                            logger.info('[SYSTEM] - Plugins status result (stderr): ' + response.result);
+
                             d.resolve(response);
 
                         } else {
                             //stdout = stdout.replace('\n', '');
-                            logger.info('[SYSTEM] - Plugins status result (stdout): ' + stdout);
+                            //logger.info('[SYSTEM] - Plugins status result (stdout): ' + stdout);
                             response.logs = stdout.replace(/\n/g,''); //JSON.parse(JSON.stringify(stdout)).replace(/\n/g,'');
                             response.message = "Plugins status result";
                             response.result = "SUCCESS";
+
+                            logger.info('[SYSTEM] - Plugins status result (stdout): ' + response.result);
+
                             d.resolve(response);
                         }
 
@@ -1506,8 +1511,6 @@ exports.execAction = function(args){
                 break;
 
 
-
-
             case 'process_check':
 
                 try {
@@ -1517,48 +1520,44 @@ exports.execAction = function(args){
                     var params = JSON.parse(params);
                     logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params, null, "\t"));
 
-                    var process_phrase = params["process"];
-                    logger.info("[SYSTEM] --> process filter: " + JSON.stringify(process_phrase));
+                    var find_process = params["process"];
+                    //logger.info("[SYSTEM] --> process filter: " + JSON.stringify(find_process));
 
-                    ps.lookup(
-                        {
-                            //command: 'python3',
-                            arguments: process_phrase
-                        }, 
-                        function(err, resultList ) {
-                            if (err) {
-                                response.result="ERROR"
-                                response.message=err
-                                d.resolve(response);
-                            }
-                            else{
-                
-                                if(resultList.length > 0){
-                
-                                    resultList.forEach(function( process ){
-                                        if( process ){
-                                            //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
-                                            response.result="SUCCESS"
-                                            response.message=resultList
-                                            d.resolve(response);
-                                        }
-                                        
-                                    });
-                                    
-                                }
-                                else{    
-
-                                    response.result="SUCCESS"
-                                    response.message= "NO_PROCESS"
-                                    d.resolve(response);
+                    exec('ps lx | grep ' + find_process + '| grep -v grep ', function (error, stdout, stderr) {
                     
-                                }
-                
-                            }
-                
-                
-                        }
-                    );  
+                      try {
+                    
+                          if (stderr) {
+                              
+                              //console.info('Check process result (stderr): ' + stderr);
+                              response.message = stderr;
+                              response.result = "WARNING";
+                              d.resolve(response);
+                    
+                          } else {
+                    
+                              var processes_list=stdout.split("\n").filter(function(a){return a !== ''})
+                              //console.info(processes_list);
+                    
+                              //processes_list.forEach(function( process ){ console.log(process); });
+                    
+                              response.message = processes_list;
+                              response.logs = processes_list;
+                              response.result = "SUCCESS";
+                              d.resolve(response);
+                    
+                          }
+                    
+                    
+                      }
+                      catch(err){
+                          response.result = "ERROR";
+                          response.message = JSON.stringify(err);
+                          console.error('[SYSTEM] - execAction error: ' + response.message);
+                          d.resolve(response);
+                      }
+                    
+                    });
 
                 } catch (err) {
 

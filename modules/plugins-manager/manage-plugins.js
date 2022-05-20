@@ -24,12 +24,10 @@ logger.setLevel(loglevel);
 var fs = require("fs");
 var Q = require("q");
 var cp = require('child_process');  	//In order to create a wrapper process for each active plugin.
-var ps = require('ps-node');			//In order to verify if a plugin is alive or not.
 var md5 = require('md5');
-
-
 var PythonShell = require('python-shell');
 var net = require('net');
+var exec = require('child_process').exec;
 
 var session_plugins = null;
 
@@ -70,34 +68,34 @@ function checkPluginAlive(plugin_name){
 	var d = Q.defer();
 
 
-    ps.lookup(
-        {
-            //command: 'python3',
-            //arguments: 'py_async'
-            arguments: "/plugins-manager.*" + plugin_name
-            //arguments: plugin_name
-            
-        }, 
-        function(err, resultList ) {
-            if (err) {
-                console.log(err)
-                response.result="ERROR"
-                response.message=err
-                response.alive=undefined
-                d.resolve(response);
-                //throw new Error( err );
-            }
-            else{
+	exec('ps lx | grep /plugins-manager.*' + plugin_name + '| grep -v grep', function (error, stdout, stderr) {
 
-                if(resultList.length > 0){
+		try {
+	  
+			if (stderr) {
+				if (stderr == "") stderr = "Getting plugin status...";
+				console.info('[SYSTEM] - Plugin alive check (stderr): ' + stderr);
+				response.message = stderr;
+				response.result = "WARNING";
+				response.alive=undefined
+				d.resolve(response);
+	  
+			} else {
 
-                    if(resultList.length > 1){
+				var processes_list=stdout.split("\n").filter(function(a){return a !== ''})
+				//console.info(processes_list);
+			  
+				if(processes_list.length > 0){
+
+                    if(processes_list.length > 1){
+
+						// Multiple instances of this plugin are running!
 
                         resultList.forEach(function( process ){
                             if( process ){
                                 //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
                                 response.result="ERROR"
-                                response.message=resultList//"Multiple instances of this plugin are running!"
+                                response.message=processes_list
                                 response.alive="MULTIPLE"
                                 d.resolve(response);
                             }
@@ -106,12 +104,27 @@ function checkPluginAlive(plugin_name){
 
                     }
                     else{
-                        let process=resultList[0]
-                        //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
+
+						let process=processes_list[0]
+						
+						let plugin={}
+						let prc=process.split(" ")
+						prc = prc.filter(function(a){return a !== ''})
+						let found_index=prc.findIndex(element => element.includes("/plugins-manager"))
+		
+						plugin.pid=prc[2]
+						plugin.ppid=prc[3]
+						plugin.command=prc[found_index];
+						plugin.plugin_name=prc[found_index+1];
+						plugin.plugin_version=prc[found_index + 2];
+						//console.log(plugin)
+
+                        //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', plugin.pid, plugin.command);
                         response.result="SUCCESS"
-                        response.message=process //"PROCESS_RUNNING"
+                        response.message=plugin //"PROCESS_RUNNING"
                         response.alive=true
                         d.resolve(response);
+
                     }
                                 
                     
@@ -124,19 +137,31 @@ function checkPluginAlive(plugin_name){
     
                 }
 
-            }
+	  
+			}
+	  
+		}
+		catch(err){
+			console.log(err)
+			response.result="ERROR"
+			response.message=err
+			response.alive=undefined
+			d.resolve(response);
+		}
+	  
+	  });
 
 
-        }
-    );
+
 
     return d.promise;
 
 }
 
 
+
 // This function checks if the plugin process is still alive otherwise starts it
-function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checksum) {
+function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 
 	try{
 
@@ -175,7 +200,8 @@ function pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checks
 						console.log('[PLUGIN] |--> ' + plugin_name + ' [status: ' + status + ' - autostart: ' + autostart+']');
 						
 						if (checkAlive.result == "ERROR") {
-							if(checkAlive.alive == "multiple"){
+							
+							if(checkAlive.alive == "MULTIPLE"){
 								console.error("[PLUGIN] - There are multiple running instances of "+plugin_name+" plugin!")
 								console.error(checkAlive.message)
 								let resultList = checkAlive.message;
@@ -1709,7 +1735,6 @@ exports.pluginKeepAlive = function (plugin_name, plugin_checksum){
 		var plugin_folder = PLUGINS_STORE + plugin_name;
 		var plugin_json_name = plugin_folder + "/" + plugin_name + '.json';
 
-		var skip = "false";
 
 		// We have to restart only the plugins:
 		// - that the "autostart" flag is TRUE (boot enabled plugin)
@@ -1730,11 +1755,11 @@ exports.pluginKeepAlive = function (plugin_name, plugin_checksum){
 
 				// BUT we call NOW "pluginStarter" in order to start immediately the plugins that have to be, with "timer" parameter set to null,
 				// so in this way we don't wait for the timer expiration 
-				pluginStarter(plugin_name, null, plugin_json_name, skip, plugin_checksum);
+				pluginStarter(plugin_name, null, plugin_json_name, plugin_checksum);
 		
 		  		var timer = setInterval(function() {
 		    
-		      		pluginStarter(plugin_name, timer, plugin_json_name, skip, plugin_checksum);
+		      		pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum);
 
 		  		}, alive_timer * 1000);  //LR checks if the plugin is alive
 
@@ -2651,11 +2676,17 @@ exports.kill = function (args){
 							}
 
 						}
+						else{
+							response.result = "WARNING";
+							response.message = 'plugin process is not running or already stopped.';
+							logger.warn('[PLUGIN] - Plugin "'+plugin_name + '": '+response.message);
+							d.resolve(response);
+						}
 
 					}
 					else{
 						response.result = "ERROR";
-						response.message = 'Error cheking process status!';
+						response.message = 'Error checking process status!';
 						logger.error('[PLUGIN] - stop plugin "'+plugin_name + '": '+response.message);
 						d.resolve(response);
 					}
