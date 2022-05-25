@@ -25,7 +25,6 @@ var crypto = require('crypto');
 var Q = require("q");
 var requestify = require('requestify');
 //var os = require('os');
-var ps = require('ps-node');
 
 
 var exec = require('child_process').exec;
@@ -1466,7 +1465,7 @@ exports.execAction = function(args){
 
                 try {
 
-                    var params = JSON.parse(params);
+                    var params = JSON.parse(JSON.stringify(params));
                     logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params, null, "\t"));
 
                     options = params["options"];
@@ -1541,7 +1540,7 @@ exports.execAction = function(args){
 
                     logger.info('[SYSTEM] - PROCESS CHECKER CALLED');
 
-                    var params = JSON.parse(params);
+                    var params = JSON.parse(JSON.stringify(params));
                     logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params, null, "\t"));
 
                     var find_process = params["process"];
