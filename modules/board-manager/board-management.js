@@ -1462,7 +1462,31 @@ exports.execAction = function(args){
 
             case 'plugins_check':
 
-                exec('pluginsCheck no_cli', function (error, stdout, stderr) {
+                var options = "no_cli"
+
+                try {
+
+                    var params = JSON.parse(params);
+                    logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params, null, "\t"));
+
+                    options = params["options"];
+
+                } catch (err) {
+
+                    //throw new Error("Parsing parameters error: " + JSON.stringify(err));
+                    if (params == null || params == undefined || params == ""){
+                        //var options = "no_cli";
+                        logger.info("[SYSTEM] --> Parameters not specified!");
+                    }
+                    else   
+                        logger.error("[SYSTEM] --> Parsing parameters error: " + JSON.stringify(err));
+
+                    logger.error("[SYSTEM] --> Set 'no_cli' view.");
+
+                }
+   
+
+                exec('pluginsCheck ' + options, function (error, stdout, stderr) {
 
                     try {
 
