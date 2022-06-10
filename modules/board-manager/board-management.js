@@ -24,11 +24,11 @@ var fs = require("fs");
 var crypto = require('crypto');
 var Q = require("q");
 var requestify = require('requestify');
-var os = require('os');
+//var os = require('os');
 
 
 var exec = require('child_process').exec;
-var spawn = require('child_process').spawn;
+//var spawn = require('child_process').spawn;
 
 var board_session = null;
 var LIGHTNINGROD_HOME = process.env.LIGHTNINGROD_HOME;
@@ -1458,6 +1458,143 @@ exports.execAction = function(args){
 
                 break;   
 
+
+            case 'plugins_check':
+
+                var options = "no_cli"
+
+                try {
+
+                    var params = JSON.parse(JSON.stringify(params));
+                    logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params, null, "\t"));
+
+                    options = params["options"];
+
+                } catch (err) {
+
+                    //throw new Error("Parsing parameters error: " + JSON.stringify(err));
+                    if (params == null || params == undefined || params == ""){
+                        //var options = "no_cli";
+                        logger.info("[SYSTEM] --> Parameters not specified!");
+                    }
+                    else   
+                        logger.error("[SYSTEM] --> Parsing parameters error: " + JSON.stringify(err));
+
+                    logger.error("[SYSTEM] --> Set 'no_cli' view.");
+
+                }
+   
+
+                exec('pluginsCheck ' + options, function (error, stdout, stderr) {
+
+                    try {
+
+                        if (error) {
+
+                            //logger.error('[SYSTEM] - Plugins status result (error): ' + error);
+                            response.message = error;
+                            response.logs = error.message;
+                            response.result = "ERROR";
+
+                            logger.info('[SYSTEM] - Plugins status result (error): ' + response.result);
+                            d.resolve(response);
+
+                        } else if (stderr) {
+
+                            if (stderr == "") stderr = "Getting plugins status...";
+
+                            //logger.info('[SYSTEM] - Plugins status result (stderr): ' + stderr);
+                            response.message = stderr;
+                            response.result = "WARNING";
+                            logger.info('[SYSTEM] - Plugins status result (stderr): ' + response.result);
+
+                            d.resolve(response);
+
+                        } else {
+                            //stdout = stdout.replace('\n', '');
+                            //logger.info('[SYSTEM] - Plugins status result (stdout): ' + stdout);
+                            response.logs = stdout.replace(/\n/g,''); //JSON.parse(JSON.stringify(stdout)).replace(/\n/g,'');
+                            response.message = "Plugins status result";
+                            response.result = "SUCCESS";
+
+                            logger.info('[SYSTEM] - Plugins status result (stdout): ' + response.result);
+
+                            d.resolve(response);
+                        }
+
+                    }
+                    catch(err){
+                        response.result = "ERROR";
+                        response.message = JSON.stringify(err);
+                        logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                        d.resolve(response);
+                    }
+
+                });
+                break;
+
+
+            case 'process_check':
+
+                try {
+
+                    logger.info('[SYSTEM] - PROCESS CHECKER CALLED');
+
+                    var params = JSON.parse(JSON.stringify(params));
+                    logger.info("[SYSTEM] --> parameters:\n" + JSON.stringify(params, null, "\t"));
+
+                    var find_process = params["process"];
+                    //logger.info("[SYSTEM] --> process filter: " + JSON.stringify(find_process));
+
+                    exec('ps lx | grep ' + find_process + '| grep -v grep ', function (error, stdout, stderr) {
+                    
+                      try {
+                    
+                          if (stderr) {
+                              
+                              //console.info('Check process result (stderr): ' + stderr);
+                              response.message = stderr;
+                              response.result = "WARNING";
+                              d.resolve(response);
+                    
+                          } else {
+                    
+                              var processes_list=stdout.split("\n").filter(function(a){return a !== ''})
+                              //console.info(processes_list);
+                    
+                              //processes_list.forEach(function( process ){ console.log(process); });
+                    
+                              response.message = processes_list;
+                              response.logs = processes_list;
+                              response.result = "SUCCESS";
+                              d.resolve(response);
+                    
+                          }
+                    
+                    
+                      }
+                      catch(err){
+                          response.result = "ERROR";
+                          response.message = JSON.stringify(err);
+                          console.error('[SYSTEM] - execAction error: ' + response.message);
+                          d.resolve(response);
+                      }
+                    
+                    });
+
+                } catch (err) {
+
+                    response.result = "ERROR";
+                    response.message = err.message;
+                    response.logs = err.stack
+                    logger.error('[SYSTEM] - execAction "' + action + '" error: ' + response.message);
+                    d.resolve(response);
+
+                }         
+            
+                break;
+    
+    
 
 
             default:

@@ -1,3 +1,15 @@
+v2.5.0
+Plugin Manager:
+- refactored plugins alive check procedures.
+Board Manager:
+- added action "process_check" and "plugins_check".
+
+
+v2.4.1
+Plugin Manager:
+- fixed API logger
+
+
 v2.4.0
 Board Manager:
 - added action "rest_submit" to sumbit generic REST request locally into device

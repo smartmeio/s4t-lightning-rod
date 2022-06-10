@@ -1,0 +1,303 @@
+#!/usr/bin/env node
+
+var __VERSION__="1.0.0"
+
+var exec = require('child_process').exec;
+var fs = require("fs");
+var Q = require("q");
+
+
+
+
+require('util').inspect.defaultOptions.depth = null;
+
+
+
+var MODE=process.argv[2]
+
+var FIND=false;
+
+
+var plg_to_find=process.argv.find(element => element.includes("--plugin="))
+if(plg_to_find != undefined){
+    FIND=true;
+    var check_plugin_name=plg_to_find.split("=")[1]
+    if(MODE != "no_cli") console.log("Plugin to check: "+check_plugin_name)
+
+}
+
+
+
+function checkPluginAlive(plugin_name, plugin_bundle){
+
+    var response = {
+        result: "",
+		message: {
+            log:"",
+            process:undefined,
+            name:"",
+            version:"",
+            status:"",
+            autostart:"",
+            alive:undefined
+        }
+	};
+
+	var d = Q.defer();
+
+    if(plugin_bundle != undefined){
+
+        var status = plugin_bundle.status;
+        var autostart = plugin_bundle.autostart;
+        var version = plugin_bundle.version;    
+
+        exec('ps lx | grep /plugins-manager.*' + plugin_name + '| grep -v grep', function (error, stdout, stderr) {
+
+            try {
+
+                var bundle={}
+                bundle.name=plugin_name
+                bundle.version=version
+                bundle.status=status
+                bundle.autostart=autostart
+        
+                if (stderr) {
+                    if (stderr == "") stderr = "Getting plugin status...";
+                    //console.info('[SYSTEM] - Plugin alive check (stderr): ' + stderr);
+
+                    bundle.log=stderr
+                    bundle.alive=undefined
+                    bundle.process=undefined
+
+                    response.result = "WARNING";
+                    response.message = bundle;
+                    
+                    d.resolve(response);
+        
+                } 
+                else {
+
+                    var processes_list=stdout.split("\n").filter(function(a){return a !== ''})
+                    //console.info(processes_list);
+                
+                    if(processes_list.length > 0){
+
+                        if(processes_list.length > 1){
+
+                            // Multiple instances of this plugin are running!
+
+                            resultList.forEach(function( process ){
+                                if( process ){
+                                    //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
+
+                                    bundle.alive="MULTIPLE"
+                                    bundle.process=processes_list
+                    
+                                    response.result = "ERROR";
+                                    response.message = bundle;
+
+                                    d.resolve(response);
+
+                                }
+                                
+                            });
+
+                        }
+                        else{
+
+                            let process=processes_list[0]
+                            
+                            let plugin={}
+                            let prc=process.split(" ")
+                            prc = prc.filter(function(a){return a !== ''})
+                            let found_index=prc.findIndex(element => element.includes("/plugins-manager"))
+            
+                            plugin.pid=prc[2]
+                            plugin.ppid=prc[3]
+                            plugin.command=prc[found_index];
+                            plugin.plugin_name=prc[found_index+1];
+                            plugin.plugin_version=prc[found_index + 2];
+                            //console.log(plugin)
+
+                            //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', plugin.pid, plugin.command);
+    
+                            //bundle.log=""
+                            bundle.alive=true
+                            bundle.process=plugin
+            
+                            response.result = "SUCCESS";
+                            response.message = bundle;
+
+                            d.resolve(response);
+
+                        }
+                                    
+                        
+                    }
+                    else{    
+
+                        //bundle.log='Plugin '+ plugin_name + ' is not running!'
+                        bundle.alive=false
+                        bundle.process="NO_PROCESS"
+        
+                        response.result = "SUCCESS";
+                        response.message = bundle;
+                        
+                        d.resolve(response);
+        
+                    }
+
+        
+                }
+        
+            }
+            catch(err){
+
+                //console.log(err)
+                bundle.alive=undefined
+                bundle.process="NO_PROCESS"
+                bundle.log=err
+
+                response.result = "ERROR";
+                response.message = bundle;
+            
+                d.resolve(response);
+            }
+        
+        });
+
+    }
+    else{
+        response.result = "WARNING";
+        response.message = "No plugin found!";
+        d.resolve(response);
+    }
+
+        
+
+    return d.promise;
+
+}
+
+
+
+function startChecks(){
+
+    var PLUGINS_SETTING = process.env.IOTRONIC_HOME + '/plugins/plugins.json';
+    var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
+    var plugins_keys = Object.keys( pluginsConf["plugins"] ); // Get the plugin json object list
+    var plugin_num = plugins_keys.length; // Get the number of plugins in the list "plugins_keys" in order to use it in the next loop
+
+    const promises = [];
+
+
+    if(FIND){
+
+        promises.push(checkPluginAlive(check_plugin_name, pluginsConf.plugins[check_plugin_name]));
+
+    }
+    else{
+
+        if(MODE != "no_cli"){
+
+            console.log('- Number of installed plugins: '+ plugin_num);
+            console.log("- Plugins installed:")
+    
+        }
+
+        plugins_keys.forEach(function( plugin_name ){
+    
+            promises.push(checkPluginAlive(plugin_name, pluginsConf.plugins[plugin_name]));
+    
+        });
+
+    }
+
+
+
+    return Promise.all(promises);
+
+}
+
+
+
+
+startChecks().then(
+
+    function(plugins_status){
+
+        if(MODE == "no_cli"){
+            console.log(JSON.stringify(plugins_status));
+        } 
+        else{
+
+            plugins_status.forEach(function( checkAlive ){
+
+                let plugin_bundle = checkAlive.message;
+
+                let plugin_name = plugin_bundle.name;
+    
+                if (checkAlive.result == "ERROR") {
+        
+                    if(plugin_bundle.alive == "MULTIPLE"){
+    
+                        if(MODE != "no_cli"){
+                            console.error("- There are multiple running instances of "+plugin_name+" plugin!")
+                            console.error(plugin_bundle.log)
+                        }
+                        
+                        let resultList = plugin_bundle.process;
+                        resultList.forEach(function( process ){
+                            if( process ){
+                                //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
+                                if(MODE != "no_cli") console.log('- PID: %s', process.pid)
+                            }
+                            
+                        });
+    
+                    }
+                    else{
+                        if(MODE != "no_cli") console.error(plugin_bundle.log)
+                    }
+                    
+                }
+                else if (checkAlive.result == "WARNING"){
+
+                    console.error('--> '+ checkAlive.message)
+                    
+                }
+                else {
+    
+                    let process=plugin_bundle.process
+    
+                    //console.log('- Plugin alive '+ plugin_name + ': ' + plugin_bundle.alive)
+                    
+                    if(plugin_bundle.alive){
+    
+                        //console.log('- Plugin '+ plugin_name + ' is running!')
+                        if(MODE != "no_cli") console.log('|--> '+ plugin_name + ' RUNNING [ PID: '+process.pid+' - LR_PID: '+process.ppid+' - version: '+plugin_bundle.version+' - status: ' + plugin_bundle.status + ' - autostart: ' + plugin_bundle.autostart+' ]')
+                        
+                    }
+                    else{
+    
+                        if(MODE != "no_cli") console.log('|--> '+ plugin_name + ' NOT_RUNNING [ version: '+plugin_bundle.version+' - status: ' + plugin_bundle.status + ' - autostart: ' + plugin_bundle.autostart+']')
+    
+                    }
+    
+                    
+    
+                }
+     
+    
+    
+            });
+       
+
+        }
+
+        
+
+
+    }
+
+)
