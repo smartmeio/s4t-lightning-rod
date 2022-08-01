@@ -163,10 +163,9 @@ function recoveryChecksums(){
 
 	exports.pluginsBootLoader();
 
-	logger.warn( '[PLUGIN] - pluginsLoader - Plugins will start without checksum check!');
 	checkIotronicChecksum = setInterval(function(){
 
-		logger.warn("[PLUGIN-CHECKSUM-RECOVERY] - RETRY...");
+		logger.warn("[PLUGIN-CHECKSUM-RECOVERY] - RECOVER CHECKSUMS LIST RETRY...");
 		session_plugins.call('s4t.iotronic.plugin.checksum', [boardCode]).then(
 
 			function (rpc_response) {
@@ -184,7 +183,7 @@ function recoveryChecksums(){
 
 					clearInterval( checkIotronicChecksum );
 
-					logger.info("[PLUGIN-CHECKSUM-RECOVERY] - Checksum recovery completed!");
+					logger.info("[PLUGIN-CHECKSUM-RECOVERY] - CHECKSUMS LIST RECOVERY COMPLETED!");
 
 				}
 
@@ -2053,13 +2052,14 @@ exports.pluginsLoader = function (){
 	try{
 
 		// Get plugins checksum from Iotronic
-		session_plugins.call('s4t.iotronic.plugin.checksums', [boardCode]).then(
+		session_plugins.call('s4t.iotronic.plugin.checksum', [boardCode]).then(
 
 			function (rpc_response) {
 
 				if (rpc_response.result == "ERROR") {
 
 					logger.error("[PLUGIN] --> Iotronic error retrieving checksums list: " + rpc_response.message);
+					logger.warn("[PLUGIN] - pluginsLoader - Plugins will start without checksum check!");
 
 					recoveryChecksums()
 
@@ -2279,7 +2279,8 @@ exports.pluginsLoader = function (){
 			},
 			function(err){
 
-				logger.error("[PLUGIN] --> Generic error retrieving checksums list: " + err);
+				logger.error("[PLUGIN] --> Generic error retrieving checksums list: " + JSON.stringify(err));
+				logger.warn("[PLUGIN] - pluginsLoader - Plugins will start without checksum check!");
 
 				recoveryChecksums()
 
