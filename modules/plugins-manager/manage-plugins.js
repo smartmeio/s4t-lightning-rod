@@ -159,6 +159,44 @@ function checkPluginAlive(plugin_name){
 }
 
 
+function recoveryChecksums(){
+
+	exports.pluginsBootLoader();
+
+	logger.warn( '[PLUGIN] - pluginsLoader - Plugins will start without checksum check!');
+	checkIotronicChecksum = setInterval(function(){
+
+		logger.warn("[PLUGIN-CHECKSUM-RECOVERY] - RETRY...");
+		session_plugins.call('s4t.iotronic.plugin.checksum', [boardCode]).then(
+
+			function (rpc_response) {
+
+				if (rpc_response.result == "ERROR") {
+
+					logger.error("[PLUGIN-CHECKSUM-RECOVERY] --> Getting plugin checksum list failed: " + rpc_response.message);
+
+				}
+				else {
+
+					CHECKSUMS_PLUGINS_LIST = rpc_response.message;
+					logger.info("[PLUGIN-CHECKSUM-RECOVERY] --> Plugins checksums list recovered");
+					logger.debug("[PLUGIN-CHECKSUM-RECOVERY] ----> checksums list:\n", CHECKSUMS_PLUGINS_LIST);
+
+					clearInterval( checkIotronicChecksum );
+
+					logger.info("[PLUGIN-CHECKSUM-RECOVERY] - Checksum recovery completed!");
+
+				}
+
+			}
+
+		);
+
+	}, alive_timer * 1000);
+
+
+}
+
 
 // This function checks if the plugin process is still alive otherwise starts it
 function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
@@ -2015,13 +2053,15 @@ exports.pluginsLoader = function (){
 	try{
 
 		// Get plugins checksum from Iotronic
-		session_plugins.call('s4t.iotronic.plugin.checksum', [boardCode]).then(
+		session_plugins.call('s4t.iotronic.plugin.checksums', [boardCode]).then(
 
 			function (rpc_response) {
 
 				if (rpc_response.result == "ERROR") {
 
-					logger.error("[PLUGIN] --> Getting plugin checksum list failed: " + rpc_response.message);
+					logger.error("[PLUGIN] --> Iotronic error retrieving checksums list: " + rpc_response.message);
+
+					recoveryChecksums()
 
 				}
 				else {
@@ -2234,6 +2274,14 @@ exports.pluginsLoader = function (){
 					}
 
 				}
+
+
+			},
+			function(err){
+
+				logger.error("[PLUGIN] --> Generic error retrieving checksums list: " + err);
+
+				recoveryChecksums()
 
 			}
 
