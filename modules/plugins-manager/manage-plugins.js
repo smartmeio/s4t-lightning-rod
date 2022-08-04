@@ -577,6 +577,8 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 									else{
 				
 										//If the schema json file doesn't exist the related plugin will be not restarted and the value of its PID will be cleaned.
+
+										clearPluginTimer(plugin_name);
 				
 										//updates the plugins.json JSON file
 										try{
@@ -599,6 +601,51 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 										catch(err){
 											logger.error('[PLUGIN] --> '+ plugin_name + ' - Error updating JSON file ' + PLUGINS_SETTING + ': ' + err);
 										}
+
+
+										//update status on Iotronic
+										try{
+
+											iotronic_plugin_status = "no_conf_file";
+							
+											session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, plugin_version, iotronic_plugin_status]).then(
+												function (rpc_response) {
+							
+													if (rpc_response.result == "ERROR") {
+							
+														response.result = "ERROR";
+														response.message = 'Error notification plugin status: ' + rpc_response.message;
+														logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+							
+													} else {
+							
+														logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
+							
+														response.result = "SUCCESS";
+														response.message = "Plugin status updated to '" + iotronic_plugin_status +"'";
+														logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
+							
+													}
+							
+												}
+											);
+										}
+										catch(err){
+							
+											response.result = "ERROR";
+							
+											if(session_plugins == null){
+												response.message = 'update plugin status error: no Iotronic session established!';
+												logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+											}
+											else{
+												response.message = 'update plugin status error: ' + err;
+												logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+											}
+							
+										}
+										
+										
 				
 									}
 				
