@@ -48,13 +48,14 @@ exports.start = function (){
                     exports.sendRPCalive(function (alive_msg) {
 
                         try{
+
                             response.writeHead(200, {"Content-Type": "application/json"});
 
                             var health = {
                                 "lr_pid": LR_PID,
                                 "internet_connection": {
                                     "status": "true",
-                                    "reason": error_test
+                                    "reason": JSON.stringify(error_test)
                                 },
                                 "wamp_connection": alive_msg,
                                 "board_id": boardCode,
@@ -65,8 +66,26 @@ exports.start = function (){
 
                         }
                         catch (err) {
+
                             response.writeHead(200, {"Content-Type": "text/plain"});
-                            var health = "Health Check error!";
+
+                            //var health = "Health Check error!";
+
+                            var health = {
+                                "lr_pid": LR_PID,
+                                "internet_connection": {
+                                    "status": "error",
+                                    "reason": JSON.stringify(err)
+                                },
+                                "wamp_connection": {
+                                    "status": "error",
+                                    "reason": JSON.stringify(err)
+                                },
+                                "board_id": boardCode,
+                                "timestamp":timestamp
+                            };
+
+
                             response.write(JSON.stringify(health),function(msg) { response.end(); });
 
                         }
@@ -82,7 +101,7 @@ exports.start = function (){
                         "lr_pid": LR_PID,
                         "internet_connection": {
                             "status": "false",
-                            "log": error_test
+                            "log": JSON.stringify(error_test)
                         },
                         "wamp_connection": {
                             "status": "false",
@@ -175,11 +194,11 @@ exports.sendRPCalive = function (callback) {
                 function (err) {
 
                     // WAMP connection is OK but I got an error on RPC communication
-                    clearTimeout(checkIotronicResponse);
+                    clearTimeout(checkHealthResponse);
 
                     var msg = {
                         "status": "false",
-                        "reason": err
+                        "reason": JSON.stringify(err)
                     };
 
                     callback(msg)
@@ -195,7 +214,12 @@ exports.sendRPCalive = function (callback) {
     }
     catch (err) {
 
-        callback("ERROR")
+        var msg = {
+            "status": "error",
+            "reason": JSON.stringify(err)
+        };
+
+        callback(msg)
 
     }
 

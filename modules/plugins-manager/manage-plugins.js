@@ -1170,7 +1170,7 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 						clearPluginTimer(plugin_name);
 	
 						//update status on Iotronic
-						iotronic_plugin_status = "stopped";
+						iotronic_plugin_status = "killed";
 						plugins[plugin_name].state = iotronic_plugin_status;
 						updateStatusIotronic(boardCode, plugin_name, version, iotronic_plugin_status).then(
 							function (res_notify) {
