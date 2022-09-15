@@ -68,10 +68,23 @@ function checkPluginAlive(plugin_name){
 	var d = Q.defer();
 
 
-	exec('ps lx | grep /plugins-manager.*' + plugin_name + '| grep -v grep', function (error, stdout, stderr) {
+	ps_cmd="ps lx | grep -E '/plugins-manager.*" + plugin_name + "($|\\s)'"
+
+	//exec('ps lx | grep /plugins-manager.*' + plugin_name + '| grep -v grep', function (error, stdout, stderr) {
+	exec(ps_cmd, function (error, stdout, stderr) {
 
 		try {
-	  
+			/*
+
+			if(error){
+				logger.error(error)
+				response.message = error;
+				response.result = "WARNING";
+				response.alive=undefined
+				d.resolve(response);
+
+			}
+			else */
 			if (stderr) {
 				if (stderr == "") stderr = "Getting plugin status...";
 				console.info('[SYSTEM] - Plugin alive check (stderr): ' + stderr);
@@ -83,7 +96,7 @@ function checkPluginAlive(plugin_name){
 			} else {
 
 				var processes_list=stdout.split("\n").filter(function(a){return a !== ''})
-				//console.info(processes_list);
+				//logger.info(processes_list);
 			  
 				if(processes_list.length > 0){
 
@@ -91,6 +104,12 @@ function checkPluginAlive(plugin_name){
 
 						// Multiple instances of this plugin are running!
 
+						response.result="ERROR"
+						response.message=processes_list
+						response.alive="MULTIPLE"
+						d.resolve(response);
+
+						/*
                         resultList.forEach(function( process ){
                             if( process ){
                                 //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
@@ -101,6 +120,7 @@ function checkPluginAlive(plugin_name){
                             }
                             
                         });
+						*/
 
                     }
                     else{
@@ -370,12 +390,15 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 							
 							if(checkAlive.alive == "MULTIPLE"){
 								console.error("[PLUGIN] - There are multiple running instances of "+plugin_name+" plugin!")
-								console.error(checkAlive.message)
+								//console.error(checkAlive.message)
+
 								let resultList = checkAlive.message;
+
 								resultList.forEach(function( process ){
 									if( process ){
 										//console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
-										console.log('- PID: %s', process.pid)
+										//console.log('- PID: %s', process.pid)
+										console.log("[PLUGIN] --> " + process)
 									}
 									
 								});

@@ -59,8 +59,11 @@ function checkPluginAlive(plugin_name, plugin_bundle){
         var autostart = plugin_bundle.autostart;
         var version = plugin_bundle.version;    
 
-        exec('ps lx | grep /plugins-manager.*' + plugin_name + '| grep -v grep', function (error, stdout, stderr) {
+        ps_cmd="ps lx | grep -E '/plugins-manager.*" + plugin_name + "($|\\s)'"
 
+        //exec('ps lx | grep /plugins-manager.*' + plugin_name + '| grep -v grep', function (error, stdout, stderr) {
+        exec(ps_cmd, function (error, stdout, stderr) {
+    
             try {
 
                 var bundle={}
@@ -94,6 +97,19 @@ function checkPluginAlive(plugin_name, plugin_bundle){
 
                             // Multiple instances of this plugin are running!
 
+                            //console.log(processes_list)
+
+                            //bundle.log="Multiple instances"
+
+                            bundle.alive="MULTIPLE"
+                            bundle.process=processes_list
+            
+                            response.result = "ERROR";
+                            response.message = bundle;
+
+                            d.resolve(response);
+
+                            /*
                             resultList.forEach(function( process ){
                                 if( process ){
                                     //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
@@ -109,6 +125,7 @@ function checkPluginAlive(plugin_name, plugin_bundle){
                                 }
                                 
                             });
+                            */
 
                         }
                         else{
@@ -252,18 +269,21 @@ startChecks().then(
                         if(plugin_bundle.alive == "MULTIPLE"){
         
                             if(MODE != "no_cli"){
-                                console.error("- There are multiple running instances of "+plugin_name+" plugin!")
-                                console.error(plugin_bundle.log)
+                                console.error("   There are multiple running instances of "+plugin_name+" plugin!")
+                                //console.error(plugin_bundle.log)
+                                //console.error(plugin_bundle.process)
                             }
+                            
                             
                             let resultList = plugin_bundle.process;
                             resultList.forEach(function( process ){
                                 if( process ){
                                     //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
-                                    if(MODE != "no_cli") console.log('- PID: %s', process.pid)
+                                    if(MODE != "no_cli") console.log("   -> " + process)
                                 }
                                 
                             });
+                            
         
                         }
                         else{
@@ -285,12 +305,12 @@ startChecks().then(
                         if(plugin_bundle.alive){
         
                             //console.log('- Plugin '+ plugin_name + ' is running!')
-                            if(MODE != "no_cli") console.log('|--> '+ plugin_name + ' RUNNING [ PID: '+process.pid+' - LR_PID: '+process.ppid+' - version: '+plugin_bundle.version+' - status: ' + plugin_bundle.status + ' - autostart: ' + plugin_bundle.autostart+' ]')
+                            if(MODE != "no_cli") console.log('|--> '+ plugin_name + ' \033[32m RUNNING \033[0m [ PID: '+process.pid+' - LR_PID: '+process.ppid+' - version: '+plugin_bundle.version+' - status: ' + plugin_bundle.status + ' - autostart: ' + plugin_bundle.autostart+' ]')
                             
                         }
                         else{
         
-                            if(MODE != "no_cli") console.log('|--> '+ plugin_name + ' NOT_RUNNING [ version: '+plugin_bundle.version+' - status: ' + plugin_bundle.status + ' - autostart: ' + plugin_bundle.autostart+']')
+                            if(MODE != "no_cli") console.log('|--> '+ plugin_name + ' \033[31m NOT_RUNNING \033[0m [ version: '+plugin_bundle.version+' - status: ' + plugin_bundle.status + ' - autostart: ' + plugin_bundle.autostart+']')
         
                         }
         
