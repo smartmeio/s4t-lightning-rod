@@ -68,10 +68,23 @@ function checkPluginAlive(plugin_name){
 	var d = Q.defer();
 
 
-	exec('ps lx | grep /plugins-manager.*' + plugin_name + '| grep -v grep', function (error, stdout, stderr) {
+	ps_cmd="ps lx | grep -E '/plugins-manager.*" + plugin_name + "($|\\s)'"
+
+	//exec('ps lx | grep /plugins-manager.*' + plugin_name + '| grep -v grep', function (error, stdout, stderr) {
+	exec(ps_cmd, function (error, stdout, stderr) {
 
 		try {
-	  
+			/*
+
+			if(error){
+				logger.error(error)
+				response.message = error;
+				response.result = "WARNING";
+				response.alive=undefined
+				d.resolve(response);
+
+			}
+			else */
 			if (stderr) {
 				if (stderr == "") stderr = "Getting plugin status...";
 				console.info('[SYSTEM] - Plugin alive check (stderr): ' + stderr);
@@ -83,7 +96,7 @@ function checkPluginAlive(plugin_name){
 			} else {
 
 				var processes_list=stdout.split("\n").filter(function(a){return a !== ''})
-				//console.info(processes_list);
+				//logger.info(processes_list);
 			  
 				if(processes_list.length > 0){
 
@@ -91,6 +104,12 @@ function checkPluginAlive(plugin_name){
 
 						// Multiple instances of this plugin are running!
 
+						response.result="ERROR"
+						response.message=processes_list
+						response.alive="MULTIPLE"
+						d.resolve(response);
+
+						/*
                         resultList.forEach(function( process ){
                             if( process ){
                                 //console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
@@ -101,6 +120,7 @@ function checkPluginAlive(plugin_name){
                             }
                             
                         });
+						*/
 
                     }
                     else{
@@ -159,6 +179,173 @@ function checkPluginAlive(plugin_name){
 }
 
 
+function recoveryChecksums(){
+
+	exports.pluginsBootLoader();
+
+	checkIotronicChecksum = setInterval(function(){
+
+		logger.warn("[PLUGIN-CHECKSUM-RECOVERY] - RECOVER CHECKSUMS LIST RETRY...");
+		session_plugins.call('s4t.iotronic.plugin.checksum', [boardCode]).then(
+
+			function (rpc_response) {
+
+				if (rpc_response.result == "ERROR") {
+
+					logger.error("[PLUGIN-CHECKSUM-RECOVERY] --> Getting plugin checksum list failed: " + rpc_response.message);
+
+				}
+				else {
+
+					CHECKSUMS_PLUGINS_LIST = rpc_response.message;
+					logger.info("[PLUGIN-CHECKSUM-RECOVERY] --> Plugins checksums list recovered");
+					logger.debug("[PLUGIN-CHECKSUM-RECOVERY] ----> checksums list:\n", CHECKSUMS_PLUGINS_LIST);
+
+					clearInterval( checkIotronicChecksum );
+
+					logger.info("[PLUGIN-CHECKSUM-RECOVERY] - CHECKSUMS LIST RECOVERY COMPLETED!");
+
+				}
+
+			}
+
+		);
+
+	}, alive_timer * 1000);
+
+
+}
+
+
+function updateStatusIotronic(boardCode, plugin_name, plugin_version, iotronic_plugin_status){
+
+	//send plugin's status to Iotronic
+
+	var d = Q.defer();
+
+	var response = {
+		message: '',
+		result: ''
+	};
+
+	try{
+
+		session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, plugin_version, iotronic_plugin_status]).then(
+			function (rpc_response) {
+
+				if (rpc_response.result == "ERROR") {
+
+					response.result = "ERROR";
+					response.message = 'Error notification plugin status "'+iotronic_plugin_status+'": ' + rpc_response.message;
+					logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
+					d.resolve(response);
+
+				} else {
+
+					logger.debug("[PLUGIN] - Set status '" + iotronic_plugin_status +"' for plugin '" + plugin_name + "' - Iotronic response: " + rpc_response.message);
+					response.result = "SUCCESS";
+					response.message = "Plugin status updated to '" + iotronic_plugin_status + "'";
+					d.resolve(response);
+
+				}
+
+			}
+		);
+
+	}
+	catch(err){
+
+		response.result = "ERROR";
+
+		if(session_plugins == null){
+			response.message = 'update plugin status error: no Iotronic session established!';
+			logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+			d.resolve(response);
+		}
+		else{
+			response.message = 'update plugin status error: ' + err;
+			logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
+			d.resolve(response);
+		}
+
+	}
+	
+
+	return d.promise;
+
+
+}
+
+
+function retryPluginRestart(boardCode, plugin_name, version, plugin_state, pluginsConf){
+
+	var d = Q.defer();
+
+	if(plugins[plugin_name].retry < 3){
+
+		plugins[plugin_name].state = "retry"
+		plugins[plugin_name].retry = plugins[plugin_name].retry + 1
+
+		logger.debug("[PLUGIN-SHELL] --> Plugin '"+plugin_name+"' retry set to "+plugins[plugin_name].retry)
+
+		//update status on Iotronic
+		iotronic_plugin_status = plugin_state+"_retry_"+plugins[plugin_name].retry;
+		plugins[plugin_name].state = iotronic_plugin_status;
+		updateStatusIotronic(boardCode, plugin_name, version, iotronic_plugin_status).then(
+			function (res_notify) {
+				d.resolve(JSON.stringify(res_notify));
+			}
+		)
+
+	}
+	else{
+
+		logger.warn("[PLUGIN-SHELL] --> Restoring attempts for plugin '"+plugin_name+"' terminated!")
+
+		clearPluginTimer(plugin_name);
+
+		// updates the JSON file and Iotronic
+		pluginsConf.plugins[plugin_name].status = "off";
+		pluginsConf.plugins[plugin_name].pid = "";
+
+		fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
+
+			if (err) {
+
+				logger.error('[PLUGIN-SHELL] --> Error stopping plugin ' + plugin_name + ': error writing plugins.json: ' + err);
+
+				//update status on Iotronic
+				iotronic_plugin_status = "update_conf_err";
+				plugins[plugin_name].state = iotronic_plugin_status;
+				updateStatusIotronic(boardCode, plugin_name, version, iotronic_plugin_status).then(
+					function (res_notify) {
+						d.resolve(JSON.stringify(res_notify));
+					}
+				)
+
+			} 
+			else {
+
+				logger.debug("[PLUGIN-SHELL] --> " + PLUGINS_SETTING + " updated!");
+
+				//update status on Iotronic	
+				plugins[plugin_name].state = plugin_state;
+				updateStatusIotronic(boardCode, plugin_name, version, plugin_state).then(
+					function (res_notify) {
+						d.resolve(JSON.stringify(res_notify));
+					}
+				)
+
+			}
+
+		});
+
+	}
+
+	return d.promise;
+
+}
+
 
 // This function checks if the plugin process is still alive otherwise starts it
 function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
@@ -197,18 +384,21 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 
 					function (checkAlive) {
 
-						console.log('[PLUGIN] |--> ' + plugin_name + ' [status: ' + status + ' - autostart: ' + autostart+']');
+						//console.log('[PLUGIN] |--> ' + plugin_name + ' [status: ' + status + ' - autostart: ' + autostart+']');	
 						
 						if (checkAlive.result == "ERROR") {
 							
 							if(checkAlive.alive == "MULTIPLE"){
 								console.error("[PLUGIN] - There are multiple running instances of "+plugin_name+" plugin!")
-								console.error(checkAlive.message)
+								//console.error(checkAlive.message)
+
 								let resultList = checkAlive.message;
+
 								resultList.forEach(function( process ){
 									if( process ){
 										//console.log( 'PID: %s, COMMAND: %s, ARGUMENTS: %s', process.pid, process.command, process.arguments );
-										console.log('- PID: %s', process.pid)
+										//console.log('- PID: %s', process.pid)
+										console.log("[PLUGIN] --> " + process)
 									}
 									
 								});
@@ -226,18 +416,46 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 								child: "",
 								pid: process.pid,
 								alive: checkAlive.alive,
-								timer: timer
+								timer: timer,
+								retry: plugins[plugin_name].retry,
+								state: plugins[plugin_name].state,
+								version: plugin_version
 							}
+
+							//logger.debug("plugin " + plugin_name +" status: "+JSON.stringify(plugins[plugin_name], null, 4))
+
 							
-							//if(checkAlive.alive){
 							if( plugins[plugin_name].alive === true ){
 
 								//console.log('[PLUGIN] - Plugin '+ plugin_name + ' is running!  [ PID: '+process.pid+', LR_PID: '+process.ppid+', PLUGIN: '+JSON.stringify(process.arguments).split('plugins-manager')[1]+' ]')
 
+								// Reset RETRY counter after a plugin crash
+								if (plugins[plugin_name].retry != 0){
+									plugins[plugin_name].retry = 0
+									logger.info('[PLUGIN] - PluginChecker - '+ plugin_name + ' - retry counter reset!');
+								}
+
+								//console.log(boardCode +" plugins[plugin_name].state -> " +plugins[plugin_name].state)
+
+								if (plugins[plugin_name].state != "running"){
+
+									//update status on Iotronic
+									iotronic_plugin_status = "running";
+									plugins[plugin_name].state = iotronic_plugin_status;
+									updateStatusIotronic(boardCode, plugin_name, plugin_version, iotronic_plugin_status).then(
+										function (res_notify) {
+											logger.info('[PLUGIN] - PluginChecker - '+ plugin_name + ' - state set to "'+plugins[plugin_name].state+'"');
+											logger.debug(JSON.stringify(res_notify))
+										}
+									)
+
+								}
+									
+
 								if(CHECKSUMS_PLUGINS_LIST.length == 0){
 									// the plugin is normally running
-									console.log('[PLUGIN] - PluginChecker - '+ plugin_name + ' with PID: ' + plugins[plugin_name].pid + ' alive: '+ plugins[plugin_name].alive );
-				
+									console.log('[PLUGIN] - PluginChecker - '+ plugin_name + ' [ state: '+plugins[plugin_name].state + " - status: " + status + " - autostart: " + autostart+" - PID: " + plugins[plugin_name].pid + " - alive: "+ plugins[plugin_name].alive +" ]");
+
 								}
 								else{
 				
@@ -258,11 +476,14 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 										
 										// the plugin is not alive and its checksum mismatches!
 										logger.warn( '[PLUGIN] - PluginChecker - '+ plugin_name + ' - The plugin was modified: checksum mismatches!');
+										
 										clearPluginTimer(plugin_name);
 				
 										pluginsConf.plugins[plugin_name].status = "off";
 										pluginsConf.plugins[plugin_name].pid = "";
-				
+
+										plugins[plugin_name].state = "invalid";
+
 										// updates the JSON file
 										fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
 				
@@ -299,7 +520,7 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 									}
 									else{
 										// the plugin is normally running
-										console.log('[PLUGIN] - PluginChecker - '+ plugin_name + ' with PID: ' + plugins[plugin_name].pid + ' alive: '+ plugins[plugin_name].alive );
+										console.log('[PLUGIN] - PluginChecker - '+ plugin_name + ' [ state: '+plugins[plugin_name].state + " - status: " + status + " - autostart: " + autostart+" - PID: " + plugins[plugin_name].pid + " - alive: "+ plugins[plugin_name].alive +" ]");
 				
 									}
 				
@@ -366,63 +587,44 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 														if(msg.name != undefined){
 				
 															if (msg.status === "alive"){
-				
+
 																//updates the JSON file plugins.json
 																try{
-				
-																	fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
+
+																	fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
+
 																		if(err) {
-																			logger.error('[PLUGIN] --> '+ plugin_name + ' - Error writing JSON file ' + PLUGINS_SETTING + ': ' + err);
-																		} else {
-																			logger.debug("[PLUGIN] --> "+ plugin_name + " - JSON file " + PLUGINS_SETTING + " updated!");
-																		}
-																	});
-				
-																	// UPDATE PLUGIN STATUS IN IOTRONIC
-																	if(CHECKSUMS_PLUGINS_LIST.length != 0){
-																		try{
-				
-																			iotronic_plugin_status = "restarted";
-				
-																			session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, plugin_version, iotronic_plugin_status]).then(
-																				function (rpc_response) {
-				
-																					if (rpc_response.result == "ERROR") {
-				
-																						response.result = "ERROR";
-																						response.message = 'Error notification plugin status: ' + rpc_response.message;
-																						logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-				
-																					} else {
-				
-																						logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-				
-																						response.result = "SUCCESS";
-																						response.message = "Plugin status updated to '" + iotronic_plugin_status +"'";
-																						logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
-				
-																					}
-				
+															
+																			logger.error('[PLUGIN] --> '+ plugin_name + ' - Error writing JSON file ' + PLUGINS_SETTING + ' on plugin started: ' + err);
+															
+																			//update status on Iotronic
+																			iotronic_plugin_status = "update_conf_err";
+																			plugins[plugin_name].state = iotronic_plugin_status;
+																			updateStatusIotronic(boardCode, plugin_name, plugin_version, iotronic_plugin_status).then(
+																				function (res_notify) {
+																					logger.debug(JSON.stringify(res_notify))
 																				}
-																			);
+																			)
+															
+																		} 
+																		else {
+															
+																			logger.debug("[PLUGIN] --> "+ plugin_name + " - JSON file " + PLUGINS_SETTING + " updated!");
+
+																			//update status on Iotronic	
+																			iotronic_plugin_status = "restarted"
+																			plugins[plugin_name].state = iotronic_plugin_status;
+																			updateStatusIotronic(boardCode, plugin_name, plugin_version, iotronic_plugin_status).then(
+																				function (res_notify) {
+																					logger.debug(JSON.stringify(res_notify))
+																				}
+																			)
+															
 																		}
-																		catch(err){
-				
-																			response.result = "ERROR";
-				
-																			if(session_plugins == null){
-																				response.message = 'update plugin status error: no Iotronic session established!';
-																				logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
-																			}
-																			else{
-																				response.message = 'update plugin status error: ' + err;
-																				logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
-																			}
-				
-																		}
-																	}
+															
+																	});
+																									
 																	
-				
 																}
 																catch(err){
 																	logger.error('[PLUGIN] --> '+ plugin_name + ' - Error updating JSON file ' + PLUGINS_SETTING + ': ' + err);
@@ -444,55 +646,16 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 																	// if plugin crashes
 				
 																	logger.error("[PLUGIN] - '"+ plugin_name + "' - plugin process failed: "+ msg.name + " - " + msg.logmsg);
-				
-																	clearPluginTimer(plugin_name);
-				
-																	// UPDATE PLUGIN STATUS IN IOTRONIC
-																	if(CHECKSUMS_PLUGINS_LIST.length != 0){
-																		
-																		try{
-				
-																			iotronic_plugin_status = "failed";
-				
-																			session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, plugin_version, iotronic_plugin_status]).then(
-																				function (rpc_response) {
-				
-																					if (rpc_response.result == "ERROR") {
-				
-																						response.result = "ERROR";
-																						response.message = 'Error notification plugin status: ' + rpc_response.message;
-																						logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-				
-																					} else {
-				
-																						logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-				
-																						response.result = "SUCCESS";
-																						response.message = "Plugin status updated to '" + iotronic_plugin_status +"'";
-																						logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
-				
-																					}
-				
-																				}
-																			);
+								
+																	//update status on Iotronic
+																	iotronic_plugin_status = "failed";
+																	plugins[plugin_name].state = iotronic_plugin_status;
+
+																	retryPluginRestart(boardCode, plugin_name, plugin_version, iotronic_plugin_status, pluginsConf).then(
+																		function (res_notify) {
+																			logger.error(JSON.stringify(res_notify))
 																		}
-																		catch(err){
-				
-																			response.result = "ERROR";
-				
-																			if(session_plugins == null){
-																				response.message = 'update plugin status error: no Iotronic session established!';
-																				logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
-																			}
-																			else{
-																				response.message = 'update plugin status error: ' + err;
-																				logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
-																			}
-				
-																		}
-																	}
-				
-				
+																	)
 				
 																}
 				
@@ -540,6 +703,8 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 									else{
 				
 										//If the schema json file doesn't exist the related plugin will be not restarted and the value of its PID will be cleaned.
+
+										clearPluginTimer(plugin_name);
 				
 										//updates the plugins.json JSON file
 										try{
@@ -562,6 +727,17 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 										catch(err){
 											logger.error('[PLUGIN] --> '+ plugin_name + ' - Error updating JSON file ' + PLUGINS_SETTING + ': ' + err);
 										}
+
+										//update status on Iotronic
+										iotronic_plugin_status = "no_input_file";
+										plugins[plugin_name].state = iotronic_plugin_status;
+										updateStatusIotronic(boardCode, plugin_name, plugin_version, iotronic_plugin_status).then(
+											function (res_notify) {
+												logger.debug(JSON.stringify(res_notify))
+											}
+										)
+										
+
 				
 									}
 				
@@ -614,68 +790,6 @@ function pluginStarter(plugin_name, timer, plugin_json_name, plugin_checksum) {
 	}
 	catch(err){
 		logger.error('[PLUGIN] --> '+ plugin_name + ' - Error loading plugin: ' + err);
-
-		/*
-		//"sync-wrapper" regex to kill all plugin types
-		cp.exec("pkill -9 -f sync-wrapper", (error, stdout, stderr) => {
-			if (error) { console.log("error:" + error.message);}
-			if (stderr) {console.log("stderr:" + stderr);}
-			console.log("stdout:" + stdout);
-		});
-		*/
-
-		/*
-		// To get pluginPID
-		cp.exec("pgrep -f "+ plugin_name, (error, stdout, stderr) => {
-			if (error) {
-				console.log("error:" + error.message);
-			}
-			if (stderr) {
-				console.log("stderr:" + stderr);
-			}
-			console.log("stdout:" + stdout);
-
-		});
-		*/
-		
-
-		
-
-		//clearPluginTimer(plugin_name);
-
-		/*
-		logger.warn('[PLUGIN] --> Recovering plugins configuration file:')
-		checkPluginsConf().then(
-			function (check_conf) {
-				logger.warn('[PLUGIN] --> '+ check_conf.result + ': ' + check_conf.message);
-
-
-				
-				logger.warn("LR restarting in 5 seconds");
-				restart_time = 3;
-
-				// activate listener on-exit event after LR exit on-update-conf
-				process.on("exit", function () {
-
-					require("child_process").spawn(process.argv.shift(), process.argv, {
-						cwd: process.cwd(),
-						detached: true,
-						stdio: "inherit"
-					});
-
-				});
-
-				//Restarting LR
-				setTimeout(function () {
-					process.exit();
-				}, restart_time * 1000);
-
-				
-
-			}
-		);
-	*/
-
 	}
 
 }
@@ -1001,53 +1115,23 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 
 		// UPDATE PLUGIN STATUS IN IOTRONIC
 		if(CHECKSUMS_PLUGINS_LIST.length != 0){
-			try{
 
-				iotronic_plugin_status = "restarted";
-
-				session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
-					function (rpc_response) {
-
-						if (rpc_response.result == "ERROR") {
-
-							response.result = "ERROR";
-							response.message = 'Error notification plugin status: ' + rpc_response.message;
-							logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-
-						} else {
-
-							logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-
-							response.result = "SUCCESS";
-							response.message = "Plugin status updated to '" + iotronic_plugin_status +"'";
-							logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
-
-						}
-
-					}
-				);
-			}
-			catch(err){
-
-				response.result = "ERROR";
-
-				if(session_plugins == null){
-					response.message = 'update plugin status error: no Iotronic session established!';
-					logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
+			//update status on Iotronic
+			iotronic_plugin_status = "restarted";
+			plugins[plugin_name].state = iotronic_plugin_status;
+			updateStatusIotronic(boardCode, plugin_name, version, iotronic_plugin_status).then(
+				function (res_notify) {
+					logger.info('[PLUGIN] - PluginChecker - '+ plugin_name + ' - state set to "'+plugins[plugin_name].state+'"');
+					logger.debug(JSON.stringify(res_notify))
 				}
-				else{
-					response.message = 'update plugin status error: ' + err;
-					logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
-				}
-
-			}
+			)
+			
 		}
 
 
 	}
 
 
-	//if(logger.level.levelStr == 'DEBUG')
 	// listening 'print' output
 	pyshell.on('message', function (message) {
 		// received a message sent from the Python script (a simple "print" statement)
@@ -1057,157 +1141,112 @@ function pyAsyncStarter(plugin_name, plugin_json, plugin_checksum, action, versi
 	// end the input stream and allow the process to exit
 	pyshell.end(function (err, code, signal) {
 
+		logger.warn("[PLUGIN-SHELL] - Plugin '"+plugin_name+"' terminated [ current state: " + plugins[plugin_name].state + " - current retry counter: " + plugins[plugin_name].retry + " ]")
+
 		if (err){
+
+			// Unexpected Error
+			logger.warn("[PLUGIN-SHELL] --> Unexpected plugin termination for plugin '" + plugin_name + "'");
+			plugin_state="unexp_err"
 
 			try{
 
 				PLUGIN_LOGGERS[plugin_name].warn("Plugin '"+plugin_name+"' error logs: \n" + JSON.stringify(err, null, "\t"));
 			}
 			catch(err){
-				logger.warn('[PLUGIN] - '+plugin_name + ' - Plugin logger error: ' + err);
-				logger.warn("Plugin '"+plugin_name+"' error logs: \n" + JSON.stringify(err, null, "\t"));
+				logger.warn("[PLUGIN-SHELL] --> Plugin '"+plugin_name +"' logger error: " + err);
+				logger.warn("\n" + JSON.stringify(err, null, "\t"));
 			}
 
-			response.result = "ERROR";
-			response.message = "Error plugin execution: please check plugin logs: \n" + err.traceback;
-
-			pluginsConf.plugins[plugin_name].status = "off";
-			pluginsConf.plugins[plugin_name].pid = "";
-
-			// updates the JSON file
-			fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function(err) {
-
-				if(err) {
-					clearPluginTimer(plugin_name);
-					response.result = "ERROR";
-					response.message = 'Error writing plugins.json: '+ err;
-					logger.error('[PLUGIN] - pyshell error in plugin "'+plugin_name + '" error: '+response.message);
-					d.resolve(response);
-
-				} else {
-					logger.debug("[PLUGIN] --> " + PLUGINS_SETTING + " updated!");
-					clearPluginTimer(plugin_name);
-					d.resolve(response);
+			retryPluginRestart(boardCode, plugin_name, version, plugin_state, pluginsConf).then(
+				function (res_notify) {
+					d.resolve(res_notify);
 				}
-
-			})
-
+			)
 		}
 		else{
 
 			try {
 
-				logger.debug('[PLUGIN-SHELL] - Python shell of "' + plugin_name + '" plugin terminated: {signal: ' + signal + ', code: ' + code + '}');
+				logger.debug('[PLUGIN-SHELL] --> Plugin "' + plugin_name + '" terminated [ signal: ' + signal + ', code: ' + code + ' ]');
 
 				if (signal == null && code == 0) {
 
-					logger.warn("[PLUGIN-SHELL] --> unexpected '" + plugin_name + "' plugin termination!");
+					// Unknown Error
+					logger.warn("[PLUGIN-SHELL] --> Unknown plugin termination for plugin '" + plugin_name + "'");
+					plugin_state="failed"
 
-					pluginsConf.plugins[plugin_name].status = "off";
-					pluginsConf.plugins[plugin_name].pid = "";
-
-					// updates the JSON file
-					fs.writeFile(PLUGINS_SETTING, JSON.stringify(pluginsConf, null, 4), function (err) {
-
-						if (err) {
-
-							response.result = "ERROR";
-							response.message = 'Error writing plugins.json: ' + err;
-							logger.error('[PLUGIN] - stop plugin ' + plugin_name + ' error: ' + response.message);
-							d.resolve(response);
-
-						} else {
-
-							logger.debug("[PLUGIN] --> " + PLUGINS_SETTING + " updated!");
-							clearPluginTimer(plugin_name);
-
-							iotronic_plugin_status = "failed";
-							session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
-								function (rpc_response) {
-
-									if (rpc_response.result == "ERROR") {
-
-										response.result = "ERROR";
-										response.message = 'Error notification plugin status: ' + rpc_response.message;
-										logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-										d.resolve(response);
-
-									} else {
-
-										logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-
-										response.result = "SUCCESS";
-										response.message = 'Plugin environment cleaned and Iotronic status updated to "' + iotronic_plugin_status + '"';
-										logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
-										d.resolve(response);
-
-									}
-
-								}
-							);
-
-
+					retryPluginRestart(boardCode, plugin_name, version, plugin_state, pluginsConf).then(
+						function (res_notify) {
+							d.resolve(res_notify);
 						}
+					)
 
-					});
-
-	
-
-				} else {
-
+				} 
+				else {
 
 					if (signal == "SIGTERM" && code == null) {
 	
-						logger.warn("[PLUGIN-SHELL] --> Plugin '" + plugin_name + "' was killed!");
+						// Plugin stopped
+						logger.warn("[PLUGIN-SHELL] --> Plugin '" + plugin_name + "' was stopped");
+
+						clearPluginTimer(plugin_name);
+	
+						//update status on Iotronic
 						iotronic_plugin_status = "killed";
+						plugins[plugin_name].state = iotronic_plugin_status;
+						updateStatusIotronic(boardCode, plugin_name, version, iotronic_plugin_status).then(
+							function (res_notify) {
+								d.resolve(res_notify);
+							}
+						)
 	
-					} else if (signal == "SIGKILL" && code == null) {
-	
-						logger.warn("[PLUGIN-SHELL] --> Plugin '" + plugin_name + "' self-killed or crashed!");
-						iotronic_plugin_status = "failed";
-	
+					} 
+					else if (signal == "SIGKILL" && code == null) {
+
+						// Plugin crashed
+						logger.warn("[PLUGIN-SHELL] --> Plugin '" + plugin_name + "' self-killed or crashed");
+						plugin_state="crashed"
+
+						retryPluginRestart(boardCode, plugin_name, version, plugin_state, pluginsConf).then(
+							function (res_notify) {
+								d.resolve(res_notify);
+							}
+						)
+
 					}
 					else{
-	
-						logger.warn("[PLUGIN-SHELL] --> Plugin '" + plugin_name + "' terminated for some reason!");
-						iotronic_plugin_status = "failed";
+
+						//Unmanaged termination
+						logger.warn("[PLUGIN-SHELL] --> Plugin '" + plugin_name + "' terminated for unknown reasons: {signal: " + signal + ", code: " + code + "}");
+						plugin_state="unm_exit"
+
+						retryPluginRestart(boardCode, plugin_name, version, plugin_state, pluginsConf).then(
+							function (res_notify) {
+								d.resolve(res_notify);
+							}
+						)
 	
 					}
-	
 
-					session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
-						function (rpc_response) {
-
-							if (rpc_response.result == "ERROR") {
-
-								response.result = "ERROR";
-								response.message = 'Error notification plugin status: ' + rpc_response.message;
-								logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-								d.resolve(response);
-
-							} else {
-
-								logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-
-								response.result = "SUCCESS";
-								response.message = 'Plugin environment cleaned and Iotronic status updated to "' + iotronic_plugin_status + '"';
-								logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
-								d.resolve(response);
-
-							}
-
-						}
-					);
-
-
+		
 				}
+
 			}
 			catch(err){
 
-				response.result = "ERROR";
-				response.message = 'Error in pyshell.end (closing): ' + err;
-				logger.error('[PLUGIN] - ' + plugin_name + ' - '+response.message);
-				d.resolve(response);
+				logger.error('[PLUGIN-SHELL] --> Error in pyshell.end (closing): ' + err);
+
+				// Termination Management Error
+				logger.warn("[PLUGIN-SHELL] --> Termination management error for plugin '" + plugin_name + "'");
+				plugin_state="tm_err"
+
+				retryPluginRestart(boardCode, plugin_name, version, plugin_state, pluginsConf).then(
+					function (res_notify) {
+						d.resolve(res_notify);
+					}
+				)
+
 
 			}
 
@@ -1534,6 +1573,15 @@ exports.call = function (args){
 
 												});
 
+												//update status on Iotronic
+												iotronic_plugin_status = "running";
+												updateStatusIotronic(boardCode, plugin_name, version, iotronic_plugin_status).then(
+													function (res_notify) {
+														logger.info('[PLUGIN] - PluginChecker - '+ plugin_name + ' - state set to "'+plugins[plugin_name].state+'"');
+														logger.debug(JSON.stringify(res_notify))
+													}
+												)
+
 											}
 
 										});
@@ -1557,56 +1605,21 @@ exports.call = function (args){
 
 										// logger.warn("[PLUGIN] - "+ msg.name + " - " + msg.logmsg);
 
-										if (msg.status === "exited") {
+										if (msg.status === "executed") {
 
 											// if plugin crashes
 
 											logger.warn("[PLUGIN] - '" + plugin_name + "' - plugin process exited: " + msg.name + " - " + msg.logmsg);
 
-											// UPDATE PLUGIN STATUS IN IOTRONIC
-											if(CHECKSUMS_PLUGINS_LIST.length != 0){
-												try{
-													iotronic_plugin_status = "exited";
-													session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
-														function (rpc_response) {
-
-															if (rpc_response.result == "ERROR") {
-
-																response.result = "ERROR";
-																response.message = 'Error notification plugin status: ' + rpc_response.message;
-																logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-
-															} else {
-
-																logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-
-																response.result = "SUCCESS";
-																response.message = 'Plugin environment cleaned and Iotronic status updated to "' + iotronic_plugin_status + '"';
-																logger.info("[PLUGIN] - plugin '" + plugin_name + "': " + response.message);
-
-															}
-
-														}
-													);
+											//update status on Iotronic
+											iotronic_plugin_status = "exited";
+											updateStatusIotronic(boardCode, plugin_name, version, iotronic_plugin_status).then(
+												function (res_notify) {
+													logger.info('[PLUGIN] - PluginChecker - '+ plugin_name + ' - state set to "'+plugins[plugin_name].state+'"');
+													logger.debug(JSON.stringify(res_notify))
 												}
-												catch(err){
-
-													response.result = "ERROR";
-
-													if(session_plugins == null){
-														response.message = 'update plugin status error: no Iotronic session established!';
-														logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
-													}
-													else{
-														response.message = 'update plugin status error: ' + err;
-														logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
-													}
-
-													
-												}
-									
-											}
-
+											)
+											
 										}
 
 									} else {
@@ -1766,6 +1779,8 @@ exports.pluginKeepAlive = function (plugin_name, plugin_checksum){
 		var pluginsConf = JSON.parse(fs.readFileSync(PLUGINS_SETTING, 'utf8'));
 		var status = pluginsConf.plugins[plugin_name].status;
 		var autostart = pluginsConf.plugins[plugin_name].autostart;
+		var plugin_version = pluginsConf.plugins[plugin_name].version;
+
 
 		var plugin_folder = PLUGINS_STORE + plugin_name;
 		var plugin_json_name = plugin_folder + "/" + plugin_name + '.json';
@@ -1802,7 +1817,10 @@ exports.pluginKeepAlive = function (plugin_name, plugin_checksum){
 					child: "",
 					pid: "",
 					alive: "",
-					timer: timer
+					timer: timer,
+					retry: 0,
+					state: "init",
+					version: plugin_version
 			  	}
 		  
 	      	}
@@ -2021,7 +2039,10 @@ exports.pluginsLoader = function (){
 
 				if (rpc_response.result == "ERROR") {
 
-					logger.error("[PLUGIN] --> Getting plugin checksum list failed: " + rpc_response.message);
+					logger.error("[PLUGIN] --> Iotronic error retrieving checksums list: " + rpc_response.message);
+					logger.warn("[PLUGIN] - pluginsLoader - Plugins will start without checksum check!");
+
+					recoveryChecksums()
 
 				}
 				else {
@@ -2234,6 +2255,15 @@ exports.pluginsLoader = function (){
 					}
 
 				}
+
+
+			},
+			function(err){
+
+				logger.error("[PLUGIN] --> Generic error retrieving checksums list: " + JSON.stringify(err));
+				logger.warn("[PLUGIN] - pluginsLoader - Plugins will start without checksum check!");
+
+				recoveryChecksums()
 
 			}
 
@@ -2473,52 +2503,17 @@ exports.run = function (args){
 			
 														logger.error("[PLUGIN] - '"+ plugin_name + "' - plugin process failed: "+ msg.name + " - " + msg.logmsg);
 			
-														clearPluginTimer(plugin_name);
-			
-														// UPDATE PLUGIN STATUS IN IOTRONIC
-														if(CHECKSUMS_PLUGINS_LIST.length != 0){
-															try{
-																iotronic_plugin_status = "failed";
-																session_plugins.call('s4t.iotronic.plugin.updateStatus', [boardCode, plugin_name, version, iotronic_plugin_status]).then(
-			
-																	function (rpc_response) {
-			
-																		if (rpc_response.result == "ERROR") {
-			
-																			response.result = "ERROR";
-																			response.message = 'Error notification plugin status: '+ rpc_response.message;
-																			logger.error("[PLUGIN] --> Error notification plugin status for '" + plugin_name + "' plugin: " + rpc_response.message);
-			
-																		}
-																		else {
-			
-																			logger.debug("[PLUGIN] - Iotronic updating status response: " + rpc_response.message);
-			
-																			response.result = "SUCCESS";
-																			response.message = 'Plugin environment cleaned and Iotronic status updated to "' + iotronic_plugin_status + '"';
-																			logger.info("[PLUGIN] - plugin '"+plugin_name + "': "+response.message);
-			
-																		}
-			
-																	}
-																);
+														//update status on Iotronic
+														iotronic_plugin_status = "failed";
+														plugins[plugin_name].state = iotronic_plugin_status;
+
+														retryPluginRestart(boardCode, plugin_name, version, iotronic_plugin_status, pluginsConf).then(
+															function (res_notify) {
+																logger.error(JSON.stringify(res_notify))
 															}
-															catch(err){
+														)
 													
-																response.result = "ERROR";
-													
-																if(session_plugins == null){
-																	response.message = 'update plugin status error: no Iotronic session established!';
-																	logger.warn('[PLUGIN] - '+plugin_name + ' - '+response.message);
-																}
-																else{
-																	response.message = 'update plugin status error: ' + err;
-																	logger.error('[PLUGIN] - '+plugin_name + ' - '+response.message);
-																}
-													
-															}
-													
-														}
+														
 													}
 			
 												} else{
@@ -2736,7 +2731,7 @@ exports.kill = function (args){
 										logger.debug("[PLUGIN] --> " + PLUGINS_SETTING + " updated!");
 										clearPluginTimer(plugin_name);
 										response.result = "SUCCESS";
-										response.message = 'Plugin killed!';
+										response.message = 'Plugin stopped!';
 										logger.info('[PLUGIN] - stop plugin "'+plugin_name + '": '+response.message);
 										d.resolve(response);
 									}
@@ -3132,10 +3127,14 @@ exports.restartPlugin = function(args){
 							var plugin_json_name = PLUGINS_STORE + plugin_name + "/" + plugin_name + '.json';
 							var plugin_json_schema = fs.readFileSync(plugin_json_name, 'utf8');
 
+							plugins[plugin_name].state="stopped"
+
 							exports.run([plugin_name, plugin_json_schema, plugin_checksum]).then(
 								function (response) {
 
 									if (response.result == "SUCCESS") {
+
+										plugins[plugin_name].state="started"
 
 										response.result = "SUCCESS";
 										response.message = "Plugin '" + plugin_name + "' successfully restarted";
@@ -3542,9 +3541,45 @@ exports.Init = function (session){
 	session.register('s4t.'+ boardCode+'.plugin.logs', exports.getPluginLogs);
 	session.register('s4t.'+ boardCode+'.plugin.updateConf', exports.updatePluginConf);
 
-
-
     logger.info('[WAMP-EXPORTS] Plugin commands exported to the cloud!');
+
+
+	try{
+
+		var cplug_keys = Object.keys( plugins );
+		var cplug_num = cplug_keys.length;
+		if (cplug_num > 0){
+
+			logger.info('[PLUGIN] - Send plugins status to Iotronic.');
+
+			logger.info('[PLUGIN] - Plugins cached: ');
+
+			for (var i = 0; i < cplug_num; i++) {
+
+				(function (i) {
+	
+					var plugin_name = cplug_keys[i];
+					logger.info('[PLUGIN] --> '+ plugin_name + ' [ state: '+plugins[plugin_name].state  +" - PID: " + plugins[plugin_name].pid + " - alive: "+ plugins[plugin_name].alive +" ]");
+					updateStatusIotronic(boardCode, plugin_name, plugins[plugin_name].version, plugins[plugin_name].state).then(
+						function (res_notify) {
+							d.resolve(JSON.stringify(res_notify));
+						}
+					)
+
+				})(i);
+	
+			}
+
+		}
+		else{
+			logger.info('[PLUGIN] - No plugins cached.');
+		}
+
+
+	}
+	catch(err){
+		logger.warn('[PLUGIN-CONNECTION-RECOVERY] - Error update plugin status on Iotronic!');
+	}
 
     
 };
